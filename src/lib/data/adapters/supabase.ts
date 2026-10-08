@@ -29,7 +29,7 @@ interface BookingRow {
   service_name: string;
   price_cents: number;
   deposit_cents: number;
-  date: string;
+  booking_date: string;
   time_slot: string;
   status: string;
   notes?: string | null;
@@ -79,7 +79,7 @@ function toBooking(row: BookingRow): Booking {
     serviceName: row.service_name,
     priceCents: row.price_cents,
     depositCents: row.deposit_cents,
-    date: row.date,
+    date: row.booking_date,
     timeSlot: row.time_slot,
     status,
     notes: row.notes ?? undefined,
@@ -146,8 +146,8 @@ export function createSupabaseAdapter(): DataStore {
 
     async listBookings(input): Promise<Booking[]> {
       const client = getSupabaseClient();
-      let query = client.from("bookings").select("*").order("date").order("time_slot");
-      if (input?.date) query = query.eq("date", input.date);
+      let query = client.from("bookings").select("*").order("booking_date").order("time_slot");
+      if (input?.date) query = query.eq("booking_date", input.date);
       const { data, error } = await query;
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => toBooking(row as unknown as BookingRow));
@@ -164,7 +164,7 @@ export function createSupabaseAdapter(): DataStore {
           service_name: input.serviceName,
           price_cents: input.priceCents,
           deposit_cents: calcDepositCents(input.priceCents),
-          date: input.date,
+          booking_date: input.date,
           time_slot: input.timeSlot,
           status: "PENDING",
           notes: input.notes ?? null,
@@ -192,7 +192,7 @@ export function createSupabaseAdapter(): DataStore {
       const { data, error } = await client
         .from("bookings")
         .select("time_slot")
-        .eq("date", date)
+        .eq("booking_date", date)
         .in("status", ["PENDING", "CONFIRMED"]);
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
@@ -228,7 +228,7 @@ export function createSupabaseAdapter(): DataStore {
       const client = getSupabaseClient();
       const { data, error } = await client
         .from("bookings")
-        .update({ date: patch.date, time_slot: patch.timeSlot })
+        .update({ booking_date: patch.date, time_slot: patch.timeSlot })
         .eq("id", id)
         .select()
         .single();

@@ -10,13 +10,13 @@ create table if not exists public.bookings (
   service_name text not null,
   price_cents integer not null check (price_cents >= 0),
   deposit_cents integer not null check (deposit_cents >= 0),
-  date date not null,
+  booking_date date not null,
   time_slot text not null,
   status text not null default 'PENDING'
     check (status in ('PENDING', 'CONFIRMED', 'CANCELLED')),
   notes text,
-  -- a date+time slot is exclusive for active bookings (PENDING/CONFIRMED)
-  unique (date, time_slot)
+  -- a booking_date + time slot is exclusive for active bookings (PENDING/CONFIRMED)
+  unique (booking_date, time_slot)
 );
 
 create table if not exists public.products (
