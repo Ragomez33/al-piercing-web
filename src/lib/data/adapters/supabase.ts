@@ -1,7 +1,8 @@
 /**
  * Production adapter — reads/writes Supabase using only the public anon key.
- * Uses the SHARED client (feature 005) so requests carry the authenticated session.
- * Rows are narrowed at the boundary; failures become typed DataError (no false-success writes).
+ * Uses the SHARED, TYPED client (`SupabaseClient<Database>`, feature 005/006) so requests carry the
+ * authenticated session and rows arrive already typed — no manual `as unknown as` casts.
+ * Failures become typed DataError (no false-success writes).
  */
 import {
   DataError,
@@ -16,42 +17,14 @@ import {
   type SchedulePatch,
   type TimeBlock,
 } from "../../types/domain";
+import type { Database } from "../../../types/supabase";
 import { calcDepositCents } from "../../utils/money";
 import { PIERCING_SERVICES, type PiercingService } from "../services";
 import { getSupabaseClient } from "../supabase-client";
 
-interface BookingRow {
-  id: string;
-  created_at: string;
-  client_name: string;
-  client_whatsapp: string;
-  service_id: string;
-  service_name: string;
-  price_cents: number;
-  deposit_cents: number;
-  booking_date: string;
-  time_slot: string;
-  status: string;
-  notes?: string | null;
-}
-
-interface ProductRow {
-  id: string;
-  name: string;
-  category: string;
-  price_cents: number;
-  stock: number;
-  image: string;
-  published: boolean;
-}
-
-interface TimeBlockRow {
-  id: string;
-  block_date: string;
-  time_slot: string;
-  duration_minutes: number;
-  label: string;
-}
+type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
+type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type TimeBlockRow = Database["public"]["Tables"]["time_blocks"]["Row"];
 
 function toTimeBlock(row: TimeBlockRow): TimeBlock {
   const duration = row.duration_minutes;
@@ -102,6 +75,11 @@ function toProduct(row: ProductRow): ProductRecord {
   };
 }
 
+function requireRow<T>(data: T | null, label: string): T {
+  if (!data) throw new DataError(`${label} no se devolvió`);
+  return data;
+}
+
 export function createSupabaseAdapter(): DataStore {
   const mode: DataMode = "production";
 
@@ -118,18 +96,18 @@ export function createSupabaseAdapter(): DataStore {
       if (!includeUnpublished) query = query.eq("published", true);
       const { data, error } = await query;
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => toProduct(row as unknown as ProductRow));
+      return (data ?? []).map((row) => toProduct(row));
     },
 
     async createProduct(input: NewProductInput): Promise<ProductRecord> {
       const client = getSupabaseClient();
       const { data, error } = await client
         .from("products")
-        .insert({ name: input.name, category: input.category, price_cents: input.priceCents, stock: input.stock, image: input.image, published: true })
+        .insert({ id: crypto.randomUUID(), name: input.name, category: input.category, price_cents: input.priceCents, stock: input.stock, image: input.image, published: true })
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toProduct(data as unknown as ProductRow);
+      return toProduct(requireRow(data, "El producto"));
     },
 
     async updateProduct(id, patch): Promise<ProductRecord> {
@@ -141,7 +119,7 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toProduct(data as unknown as ProductRow);
+      return toProduct(requireRow(data, "El producto"));
     },
 
     async listBookings(input): Promise<Booking[]> {
@@ -150,7 +128,7 @@ export function createSupabaseAdapter(): DataStore {
       if (input?.date) query = query.eq("booking_date", input.date);
       const { data, error } = await query;
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => toBooking(row as unknown as BookingRow));
+      return (data ?? []).map((row) => toBooking(row));
     },
 
     async createBooking(input: NewBookingInput): Promise<Booking> {
@@ -172,7 +150,7 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toBooking(data as unknown as BookingRow);
+      return toBooking(requireRow(data, "La reserva"));
     },
 
     async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
@@ -184,7 +162,7 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toBooking(data as unknown as BookingRow);
+      return toBooking(requireRow(data, "La reserva"));
     },
 
     async getBookedSlots(date: string): Promise<string[]> {
@@ -195,7 +173,7 @@ export function createSupabaseAdapter(): DataStore {
         .eq("booking_date", date)
         .in("status", ["PENDING", "CONFIRMED"]);
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
+      return (data ?? []).map((row) => row.time_slot);
     },
 
     async listBlocks(input): Promise<TimeBlock[]> {
@@ -204,7 +182,7 @@ export function createSupabaseAdapter(): DataStore {
       if (input?.date) query = query.eq("block_date", input.date);
       const { data, error } = await query;
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => toTimeBlock(row as unknown as TimeBlockRow));
+      return (data ?? []).map((row) => toTimeBlock(row));
     },
 
     async createBlock(input: NewBlockInput): Promise<TimeBlock> {
@@ -215,7 +193,7 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toTimeBlock(data as unknown as TimeBlockRow);
+      return toTimeBlock(requireRow(data, "El bloqueo"));
     },
 
     async deleteBlock(id: string): Promise<void> {
@@ -233,14 +211,14 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toBooking(data as unknown as BookingRow);
+      return toBooking(requireRow(data, "La reserva"));
     },
 
     async getBlockedSlots(date: string): Promise<string[]> {
       const client = getSupabaseClient();
       const { data, error } = await client.from("time_blocks").select("time_slot").eq("block_date", date);
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
+      return (data ?? []).map((row) => row.time_slot);
     },
   };
 }

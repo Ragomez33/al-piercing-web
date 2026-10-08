@@ -5,8 +5,9 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DataError } from "../types/domain";
+import type { Database } from "../../types/supabase";
 
-let client: SupabaseClient | null = null;
+let client: SupabaseClient<Database> | null = null;
 
 function envValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -19,14 +20,14 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
-export function getSupabaseClient(): SupabaseClient {
+export function getSupabaseClient(): SupabaseClient<Database> {
   const url = envValue(import.meta.env.PUBLIC_SUPABASE_URL);
   const anon = envValue(import.meta.env.PUBLIC_SUPABASE_ANON_KEY);
   if (!url || !anon) {
     throw new DataError("Supabase no está configurado");
   }
   if (!client) {
-    client = createClient(url, anon);
+    client = createClient<Database>(url, anon);
   }
   return client;
 }
