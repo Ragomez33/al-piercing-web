@@ -13,6 +13,7 @@
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
   import type { ProductRecord } from "../../lib/types/domain";
   import { formatCents } from "../../lib/utils/money";
+  import { uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
 
   type AdminTab = "calendar" | "catalog";
@@ -74,8 +75,11 @@
   let newCategory = $state<ProductCategory>("Argollas & Labrets");
   let newPrice = $state("");
   let newStock = $state("");
-  let newImage = $state("");
   let createError = $state("");
+  // Image upload state
+  let imageFile = $state<File | null>(null);
+  let imagePreview = $state<string | null>(null);
+  let uploadingImage = $state(false);
 
   function switchTab(next: AdminTab) {
     tab = next;
@@ -193,15 +197,36 @@
     }
   }
 
+  function clearImagePreview() {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    imagePreview = null;
+    imageFile = null;
+  }
+
   function closeCreate() {
     showCreate = false;
+    clearImagePreview();
+  }
+
+  function onImageChange(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    if (file && !file.type.startsWith("image/")) {
+      createError = "El archivo debe ser una imagen";
+      imageFile = null;
+      imagePreview = null;
+      return;
+    }
+    createError = "";
+    imageFile = file;
+    imagePreview = file ? URL.createObjectURL(file) : null;
   }
 
   async function submitCreate() {
     const name = newName.trim();
     const priceCents = Number(newPrice);
     const stock = Number(newStock);
-    const image = newImage.trim() || "/images/products/placeholder.svg";
 
     if (name.length === 0) {
       createError = "El nombre es obligatorio";
@@ -216,16 +241,24 @@
       return;
     }
 
+    createError = "";
     try {
+      // Upload the selected file (if any) and use its public URL as `image`.
+      let image = "/images/products/placeholder.svg";
+      if (imageFile) {
+        uploadingImage = true;
+        image = await uploadProductImage(imageFile);
+      }
       await dataStore.createProduct({ name, category: newCategory, priceCents, stock, image });
       closeCreate();
       newName = "";
       newPrice = "";
       newStock = "";
-      newImage = "";
       await refreshCatalog();
     } catch (err) {
       createError = err instanceof DataError ? err.message : "No se pudo crear el producto";
+    } finally {
+      uploadingImage = false;
     }
   }
 </script>
@@ -452,16 +485,31 @@
         <label class="field" for="np-stock">Stock</label>
         <input class="input" id="np-stock" type="number" min="0" step="1" inputmode="numeric" bind:value={newStock} required />
 
-        <label class="field" for="np-image">Imagen (ruta/URL)</label>
-        <input class="input" id="np-image" type="text" bind:value={newImage} placeholder="/images/products/placeholder.svg" />
+        <label class="field" for="np-image">Imagen</label>
+        <input
+          class="input file-input"
+          id="np-image"
+          type="file"
+          accept="image/*"
+          onchange={onImageChange}
+        />
+        {#if imagePreview}
+          <div class="image-preview">
+            <img src={imagePreview} alt="Vista previa de la imagen seleccionada" />
+          </div>
+        {/if}
 
         {#if createError}
           <p class="error" role="alert">{createError}</p>
         {/if}
 
         <div class="modal-actions">
-          <button type="button" class="ghost" onclick={closeCreate}>Cancelar</button>
-          <button type="submit" class="primary">Crear Producto</button>
+          <button type="button" class="ghost" onclick={closeCreate} disabled={uploadingImage}>
+            Cancelar
+          </button>
+          <button type="submit" class="primary" disabled={uploadingImage}>
+            {uploadingImage ? "Subiendo imagen…" : "Crear Producto"}
+          </button>
         </div>
       </form>
     </section>
@@ -971,6 +1019,50 @@
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+  }
+
+  /* File picker styled to match the Dark Luxury control skin. */
+  .file-input {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+  }
+
+  .file-input::file-selector-button {
+    margin-right: 0.75rem;
+    padding: 0.35rem 0.85rem;
+    border: none;
+    border-radius: var(--radius-btn);
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 160ms ease;
+  }
+
+  .file-input::file-selector-button:hover {
+    background: var(--accent-primary-hover);
+  }
+
+  .image-preview {
+    display: flex;
+    justify-content: center;
+    padding: 0.5rem;
+    border: var(--border-card);
+    border-radius: var(--radius-image);
+    background: var(--bg-control);
+  }
+
+  .image-preview img {
+    max-width: 100%;
+    max-height: 160px;
+    border-radius: var(--radius-image);
+    object-fit: contain;
+  }
+
+  .ghost:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .modal-actions {

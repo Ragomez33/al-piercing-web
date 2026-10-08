@@ -179,6 +179,11 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   content is not pushed off-screen.
 - Data actions, the `?tab=` sync and the auth gate are unchanged; the public footer is not rendered on
   `/admin`.
+- **Product image upload**: the "Nuevo Producto" modal uses a file picker (`accept="image/*"`) with a
+  live thumbnail preview and an inline "Subiendo imagen…" busy state. Uploads are delegated to
+  `src/lib/services/storage.ts` (components never call Supabase Storage directly); production uploads go
+  to the public `products` bucket and return `getPublicUrl()`, while demo mode inlines the image as a data
+  URL. The file-picker button reuses the gold accent (`--accent-primary`/`--accent-on`).
 
 ---
 
