@@ -50,6 +50,9 @@
   --bg-gold-faint: rgba(229, 169, 60, 0.04);
   --bg-card-translucent: rgba(26, 26, 30, 0.6);
 
+  /* Global footer surface */
+  --bg-footer: #0D0D0F;
+
   /* Geometry & Elevation */
   --radius-card: 16px;
   --radius-pill: 9999px;
