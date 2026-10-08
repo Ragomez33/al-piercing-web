@@ -9,7 +9,7 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50% → mensaje pre-llenado a WhatsApp |
-| `/admin` | Panel | Protegido por login (Supabase Auth): pestaña Agenda/Citas (confirmar, cancelar, filtro por fecha) e Inventario (stock inline, publicar/ocultar, alta de productos) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): **Calendario** semanal (citas por bloque, confirmar/reagendar/cancelar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
 
 ## Datos (capa híbrida)
 
@@ -25,7 +25,8 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 ```text
 src/
 ├── components/
-│   ├── admin/AdminPanel.svelte       # Island del panel (PIN + agenda + inventario)
+│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario)
+│   ├── admin/AdminCalendar.svelte    # Calendario semanal (compuesto dentro del island)
 │   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + seña
 │   ├── canvas/InkBackgroundCanvas.svelte
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
@@ -34,7 +35,7 @@ src/
 │   └── ui/AppHeader.astro
 ├── layouts/BaseLayout.astro
 ├── lib/
-│   ├── config.ts                     # WhatsApp, PIN y datos de pago (env-overridable)
+│   ├── config.ts                     # WhatsApp y datos de pago (env-overridable)
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PIERCING_SERVICES (menú fijo)

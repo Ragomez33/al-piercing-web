@@ -45,6 +45,11 @@
   --ink-blob-accent: rgba(184, 122, 75, 0.12);
   --ink-blob-transparent: rgba(229, 169, 60, 0);
 
+  /* Calendar grid lines (feature 006) */
+  --divider-subtle: rgba(255, 255, 255, 0.05);
+  --bg-gold-faint: rgba(229, 169, 60, 0.04);
+  --bg-card-translucent: rgba(26, 26, 30, 0.6);
+
   /* Geometry & Elevation */
   --radius-card: 16px;
   --radius-pill: 9999px;

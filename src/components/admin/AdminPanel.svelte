@@ -10,10 +10,11 @@
   import { DataError, dataStore } from "../../lib/data/store";
   import { isSupabaseConfigured } from "../../lib/data/supabase-client";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
-  import type { Booking, BookingStatus, ProductRecord } from "../../lib/types/domain";
+  import type { ProductRecord } from "../../lib/types/domain";
   import { formatCents } from "../../lib/utils/money";
+  import AdminCalendar from "./AdminCalendar.svelte";
 
-  type AdminTab = "bookings" | "catalog";
+  type AdminTab = "calendar" | "catalog";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -25,17 +26,10 @@
   let loginError = $state("");
   let signingIn = $state(false);
 
-  let tab = $state<AdminTab>("bookings");
+  let tab = $state<AdminTab>("calendar");
   let mode = $state(dataStore.mode);
 
-  // Bookings state
-  let bookings = $state<Booking[]>([]);
-  let bookingsLoading = $state(false);
-  let bookingsError = $state("");
-  let filterDate = $state("");
-  let busy = $state<Record<string, boolean>>({});
-
-  // Products state
+  // Products state (catalog tab)
   let products = $state<ProductRecord[]>([]);
   let productsLoading = $state(false);
   let productsError = $state("");
@@ -56,31 +50,22 @@
     const url = new URL(window.location.href);
     url.searchParams.set("tab", next);
     window.history.replaceState({}, "", url);
-    void refresh();
+    if (next === "catalog") void refreshCatalog();
   }
 
-  async function refresh() {
+  async function refreshCatalog() {
     try {
-      if (tab === "bookings") {
-        bookingsLoading = true;
-        bookingsError = "";
-        bookings = await dataStore.listBookings(filterDate ? { date: filterDate } : undefined);
-      } else {
-        productsLoading = true;
-        productsError = "";
-        products = await dataStore.listProducts({ includeUnpublished: true });
-      }
+      productsLoading = true;
+      productsError = "";
+      products = await dataStore.listProducts({ includeUnpublished: true });
     } catch (err) {
-      const message = err instanceof DataError ? err.message : "Error al cargar los datos";
-      if (tab === "bookings") bookingsError = message;
-      else productsError = message;
+      productsError = err instanceof DataError ? err.message : "Error al cargar el inventario";
     } finally {
-      bookingsLoading = false;
       productsLoading = false;
     }
   }
 
-  // --- Auth gate (feature 005: replaces PIN) ---
+  // --- Auth gate (feature 005) ---
   async function submitLogin(event: SubmitEvent) {
     event.preventDefault();
     const value = email.trim();
@@ -100,7 +85,6 @@
       status = "dashboard";
       email = "";
       password = "";
-      void refresh();
     } catch (err) {
       loginError = err instanceof DataError ? err.message : "Error de autenticación";
     } finally {
@@ -112,7 +96,7 @@
     try {
       await signOut();
     } catch {
-      // onAuthStateChange still flips to login; no action needed here.
+      // onAuthStateChange still flips to login.
     }
   }
 
@@ -127,19 +111,18 @@
     if (session) {
       adminEmail = session.email;
       status = "dashboard";
-      void refresh();
     } else {
       status = "login";
     }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "catalog") tab = "catalog";
     unsubscribeAuth = onAuthStateChange((sessionEmail) => {
       if (sessionEmail) {
         adminEmail = sessionEmail;
         status = "dashboard";
-        void refresh();
       } else {
         status = "login";
         adminEmail = "";
-        bookings = [];
         products = [];
       }
     });
@@ -149,20 +132,7 @@
     unsubscribeAuth?.();
   });
 
-  // --- Bookings actions (US1 feature 004) ---
-  async function setStatus(bookingId: string, bookingStatus: BookingStatus) {
-    busy[bookingId] = true;
-    try {
-      await dataStore.updateBookingStatus(bookingId, bookingStatus);
-      await refresh();
-    } catch (err) {
-      bookingsError = err instanceof DataError ? err.message : "No se pudo actualizar la cita";
-    } finally {
-      busy[bookingId] = false;
-    }
-  }
-
-  // --- Catalog actions (US3 feature 004) ---
+  // --- Catalog actions (feature 004) ---
   async function saveStock(product: ProductRecord) {
     const next = stockDraft[product.id];
     if (next === undefined || !Number.isInteger(next) || next < 0) return;
@@ -170,7 +140,7 @@
     try {
       await dataStore.updateProduct(product.id, { stock: next });
       delete stockDraft[product.id];
-      await refresh();
+      await refreshCatalog();
     } catch (err) {
       productsError = err instanceof DataError ? err.message : "No se pudo guardar el stock";
     } finally {
@@ -182,7 +152,7 @@
     saving[product.id] = true;
     try {
       await dataStore.updateProduct(product.id, { published: !product.published });
-      await refresh();
+      await refreshCatalog();
     } catch (err) {
       productsError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
     } finally {
@@ -220,7 +190,7 @@
       newPrice = "";
       newStock = "";
       newImage = "";
-      await refresh();
+      await refreshCatalog();
     } catch (err) {
       createError = err instanceof DataError ? err.message : "No se pudo crear el producto";
     }
@@ -291,11 +261,11 @@
       <button
         type="button"
         class="tab"
-        class:active={tab === "bookings"}
-        aria-pressed={tab === "bookings"}
-        onclick={() => switchTab("bookings")}
+        class:active={tab === "calendar"}
+        aria-pressed={tab === "calendar"}
+        onclick={() => switchTab("calendar")}
       >
-        Agenda y Citas
+        Calendario
       </button>
       <button
         type="button"
@@ -308,65 +278,8 @@
       </button>
     </nav>
 
-    {#if tab === "bookings"}
-      <div class="toolbar">
-        <label class="field field-inline" for="filter-date">
-          Agenda por fecha
-          <input id="filter-date" type="date" bind:value={filterDate} onchange={() => void refresh()} />
-        </label>
-        {#if filterDate}
-          <button type="button" class="ghost" onclick={() => { filterDate = ""; void refresh(); }}>
-            Limpiar filtro
-          </button>
-        {/if}
-      </div>
-
-      {#if bookingsLoading}
-        <p class="hint" aria-live="polite">Cargando citas…</p>
-      {:else if bookingsError}
-        <p class="error" role="alert">{bookingsError}</p>
-      {:else if bookings.length === 0}
-        <p class="empty">No hay citas para esta vista.</p>
-      {:else}
-        <ul class="rows">
-          {#each bookings as booking (booking.id)}
-            <li class="row">
-              <div class="row-main">
-                <strong class="row-title">{booking.clientName}</strong>
-                <span class="row-sub">{booking.clientWhatsapp}</span>
-                <span class="row-sub">{booking.serviceName}</span>
-              </div>
-              <div class="row-meta">
-                <span class="when">{booking.date} · {booking.timeSlot}</span>
-                <span class="amount">{formatCents(booking.depositCents)}</span>
-              </div>
-              <span class="badge badge-{booking.status.toLowerCase()}">{booking.status}</span>
-              <div class="row-actions">
-                {#if booking.status === "PENDING"}
-                  <button
-                    type="button"
-                    class="primary small"
-                    disabled={busy[booking.id]}
-                    onclick={() => setStatus(booking.id, "CONFIRMED")}
-                  >
-                    Confirmar Cita
-                  </button>
-                {/if}
-                {#if booking.status !== "CANCELLED"}
-                  <button
-                    type="button"
-                    class="danger small"
-                    disabled={busy[booking.id]}
-                    onclick={() => setStatus(booking.id, "CANCELLED")}
-                  >
-                    Cancelar
-                  </button>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+    {#if tab === "calendar"}
+      <AdminCalendar />
     {:else}
       <div class="toolbar">
         <button type="button" class="primary" onclick={() => { createError = ""; showCreate = true; }}>
@@ -486,7 +399,7 @@
 <style>
   .gate,
   .panel {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 2rem 1.25rem;
   }
@@ -549,12 +462,6 @@
     color: var(--text-secondary);
     font-size: 0.9rem;
     font-weight: 600;
-  }
-
-  .field-inline {
-    flex-direction: row;
-    align-items: center;
-    gap: 0.5rem;
   }
 
   .field input,
@@ -681,8 +588,7 @@
     box-shadow: var(--shadow-glow);
   }
 
-  .primary:disabled,
-  .danger:disabled {
+  .primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     box-shadow: none;
@@ -693,12 +599,6 @@
     color: var(--text-secondary);
     border: var(--border-card);
     text-decoration: none;
-  }
-
-  .danger {
-    background: transparent;
-    color: var(--accent-negative);
-    border: 1px solid var(--accent-negative);
   }
 
   .rows {
@@ -737,54 +637,6 @@
   .row-sub {
     color: var(--text-secondary);
     font-size: 0.85rem;
-  }
-
-  .row-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    align-items: flex-end;
-  }
-
-  .when {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .amount {
-    font-weight: 700;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .badge {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-pill);
-  }
-
-  .badge-pending {
-    background: var(--bg-wood-pill);
-    color: var(--accent-gold);
-  }
-
-  .badge-confirmed {
-    background: var(--accent-positive-tint);
-    color: var(--accent-positive);
-  }
-
-  .badge-cancelled {
-    background: var(--accent-negative-tint);
-    color: var(--accent-negative);
-  }
-
-  .row-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
   }
 
   .thumb {

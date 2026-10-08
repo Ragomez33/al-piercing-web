@@ -53,6 +53,28 @@ export interface NewProductInput {
   image: string;
 }
 
+/** Manual unavailability block created by the operator (feature 006). */
+export interface TimeBlock {
+  id: string;
+  date: string; // local ISO yyyy-mm-dd
+  timeSlot: string; // HH:mm within the calendar window
+  durationMinutes: number; // 15 | 30 | 60 | 90 | 120
+  label: string; // non-empty (e.g. "Almuerzo", "Personal")
+}
+
+export interface NewBlockInput {
+  date: string;
+  timeSlot: string;
+  durationMinutes: number;
+  label: string;
+}
+
+/** Date/time change for `[Reagendar]` (target must be free). */
+export interface SchedulePatch {
+  date: string;
+  timeSlot: string;
+}
+
 /** Typed application error thrown by the data layer (never raw/unexpected values). */
 export class DataError extends Error {
   constructor(message: string) {
@@ -75,4 +97,12 @@ export interface DataStore {
   createBooking(input: NewBookingInput): Promise<Booking>;
   updateBookingStatus(id: string, status: BookingStatus): Promise<Booking>;
   getBookedSlots(date: string): Promise<string[]>;
+  /** Manual unavailability blocks (feature 006). */
+  listBlocks(input?: { date?: string }): Promise<TimeBlock[]>;
+  createBlock(input: NewBlockInput): Promise<TimeBlock>;
+  deleteBlock(id: string): Promise<void>;
+  /** Moves a booking to a new exclusive date/time slot (feature 006). */
+  updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking>;
+  /** timeSlot values manually blocked for a date (public availability). */
+  getBlockedSlots(date: string): Promise<string[]>;
 }

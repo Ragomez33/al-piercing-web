@@ -33,7 +33,11 @@
     }
     slotsLoading = true;
     try {
-      bookedSlots = await dataStore.getBookedSlots(date);
+      const [booked, blocked] = await Promise.all([
+        dataStore.getBookedSlots(date),
+        dataStore.getBlockedSlots(date),
+      ]);
+      bookedSlots = [...new Set([...booked, ...blocked])];
     } catch (err) {
       bookedSlots = [];
       submitError = err instanceof DataError ? err.message : "No se pudo consultar la agenda";

@@ -9,9 +9,12 @@ import {
   type BookingStatus,
   type DataMode,
   type DataStore,
+  type NewBlockInput,
   type NewBookingInput,
   type NewProductInput,
   type ProductRecord,
+  type SchedulePatch,
+  type TimeBlock,
 } from "../../types/domain";
 import { calcDepositCents } from "../../utils/money";
 import { PIERCING_SERVICES, type PiercingService } from "../services";
@@ -40,6 +43,28 @@ interface ProductRow {
   stock: number;
   image: string;
   published: boolean;
+}
+
+interface TimeBlockRow {
+  id: string;
+  date: string;
+  time_slot: string;
+  duration_minutes: number;
+  label: string;
+}
+
+function toTimeBlock(row: TimeBlockRow): TimeBlock {
+  const duration = row.duration_minutes;
+  if (duration !== 15 && duration !== 30 && duration !== 60 && duration !== 90 && duration !== 120) {
+    throw new DataError(`Duración de bloqueo inválida: ${duration}`);
+  }
+  return {
+    id: row.id,
+    date: row.date,
+    timeSlot: row.time_slot,
+    durationMinutes: duration,
+    label: row.label,
+  };
 }
 
 function toBooking(row: BookingRow): Booking {
@@ -169,6 +194,51 @@ export function createSupabaseAdapter(): DataStore {
         .select("time_slot")
         .eq("date", date)
         .in("status", ["PENDING", "CONFIRMED"]);
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
+    },
+
+    async listBlocks(input): Promise<TimeBlock[]> {
+      const client = getSupabaseClient();
+      let query = client.from("time_blocks").select("*").order("date").order("time_slot");
+      if (input?.date) query = query.eq("date", input.date);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toTimeBlock(row as unknown as TimeBlockRow));
+    },
+
+    async createBlock(input: NewBlockInput): Promise<TimeBlock> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("time_blocks")
+        .insert({ date: input.date, time_slot: input.timeSlot, duration_minutes: input.durationMinutes, label: input.label })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toTimeBlock(data as unknown as TimeBlockRow);
+    },
+
+    async deleteBlock(id: string): Promise<void> {
+      const client = getSupabaseClient();
+      const { error } = await client.from("time_blocks").delete().eq("id", id);
+      if (error) throw new DataError(error.message);
+    },
+
+    async updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("bookings")
+        .update({ date: patch.date, time_slot: patch.timeSlot })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toBooking(data as unknown as BookingRow);
+    },
+
+    async getBlockedSlots(date: string): Promise<string[]> {
+      const client = getSupabaseClient();
+      const { data, error } = await client.from("time_blocks").select("time_slot").eq("date", date);
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
     },

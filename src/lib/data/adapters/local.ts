@@ -7,9 +7,12 @@ import {
   type Booking,
   type BookingStatus,
   type DataStore,
+  type NewBlockInput,
   type NewBookingInput,
   type NewProductInput,
   type ProductRecord,
+  type SchedulePatch,
+  type TimeBlock,
 } from "../../types/domain";
 import { PRODUCTS } from "../../types/content";
 import { calcDepositCents } from "../../utils/money";
@@ -17,6 +20,7 @@ import { PIERCING_SERVICES, type PiercingService } from "../services";
 
 const BOOKINGS_KEY = "alpi:bookings:v1";
 const PRODUCTS_KEY = "alpi:products:v1";
+const BLOCKS_KEY = "alpi:timeblocks:v1";
 
 function storage(): Storage {
   try {
@@ -27,6 +31,10 @@ function storage(): Storage {
 }
 
 function seedBookings(): Booking[] {
+  return [];
+}
+
+function seedBlocks(): TimeBlock[] {
   return [];
 }
 
@@ -69,6 +77,18 @@ function isProductRecord(value: unknown): value is ProductRecord {
     typeof value.stock === "number" &&
     typeof value.image === "string" &&
     typeof value.published === "boolean"
+  );
+}
+
+function isTimeBlock(value: unknown): value is TimeBlock {
+  if (!isRecord(value)) return false;
+  const duration = value.durationMinutes;
+  return (
+    typeof value.id === "string" &&
+    typeof value.date === "string" &&
+    typeof value.timeSlot === "string" &&
+    (duration === 15 || duration === 30 || duration === 60 || duration === 90 || duration === 120) &&
+    typeof value.label === "string"
   );
 }
 
@@ -181,6 +201,42 @@ export function createLocalAdapter(): DataStore {
             (booking.status === "PENDING" || booking.status === "CONFIRMED"),
         )
         .map((booking) => booking.timeSlot);
+    },
+
+    async listBlocks(input): Promise<TimeBlock[]> {
+      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
+      return input?.date ? blocks.filter((block) => block.date === input.date) : blocks;
+    },
+
+    async createBlock(input: NewBlockInput): Promise<TimeBlock> {
+      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
+      const record: TimeBlock = { ...input, id: newId() };
+      await writeArray(BLOCKS_KEY, [...blocks, record]);
+      return record;
+    },
+
+    async deleteBlock(id: string): Promise<void> {
+      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
+      const next = blocks.filter((block) => block.id !== id);
+      await writeArray(BLOCKS_KEY, next);
+    },
+
+    async updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking> {
+      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking);
+      let updated: Booking | undefined;
+      const next = bookings.map((booking) =>
+        booking.id === id
+          ? ((updated = { ...booking, date: patch.date, timeSlot: patch.timeSlot }), updated)
+          : booking,
+      );
+      if (!updated) throw new DataError("Reserva no encontrada");
+      await writeArray(BOOKINGS_KEY, next);
+      return updated;
+    },
+
+    async getBlockedSlots(date: string): Promise<string[]> {
+      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
+      return blocks.filter((block) => block.date === date).map((block) => block.timeSlot);
     },
   };
 }
