@@ -163,6 +163,16 @@ export function createLocalAdapter(): DataStore {
 
     async createBooking(input: NewBookingInput): Promise<Booking> {
       const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking);
+      // Active-slot exclusivity parity with the production partial unique index
+      // (feature 009): a second PENDING/CONFIRMED request for the same date+time
+      // is rejected so demo and production behave identically (FR-014).
+      const taken = bookings.some(
+        (booking) =>
+          booking.date === input.date &&
+          booking.timeSlot === input.timeSlot &&
+          (booking.status === "PENDING" || booking.status === "CONFIRMED"),
+      );
+      if (taken) throw new DataError("Ese horario ya fue solicitado. Elegí otro horario.");
       const record: Booking = {
         id: newId(),
         createdAt: new Date().toISOString(),

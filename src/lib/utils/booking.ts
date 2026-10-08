@@ -1,52 +1,44 @@
-import type { PiercingService } from "../data/services";
-import { calcDepositCents, formatCents } from "./money";
-
-export interface BookingRequest {
-  /** Studio WhatsApp number, digits only with country code. */
-  phone: string;
-  service: PiercingService;
-  /** ISO `yyyy-mm-dd`. */
-  date: string;
-  /** `HH:mm`. */
-  time: string;
-  clientName: string;
-  clientWhatsapp: string;
-  notes?: string;
-}
+import type { Booking } from "../types/domain";
 
 /**
- * Builds the pre-filled WhatsApp message for a booking request, including the
- * 50% deposit and the remaining balance. Returns `null` while required data is
- * missing so the UI can disable the submit action.
+ * Pure WhatsApp message builders for the booking lifecycle (feature 009).
+ * Both return `null` while the configured phone is not digits-only, so the UI
+ * never offers a broken link (research R5, FR-004/FR-011/FR-015). Accented and
+ * special characters are preserved via `encodeURIComponent`.
  */
-export function buildBookingWhatsAppLink(request: BookingRequest): string | null {
-  const { phone, service, date, time, clientName, clientWhatsapp, notes } = request;
-  if (!/^[0-9]+$/.test(phone)) return null;
-  if (!service || !date || !time || !clientName.trim() || !clientWhatsapp.trim()) return null;
 
-  const deposit = calcDepositCents(service.priceCents);
-  const balance = service.priceCents - deposit;
+/** Post-submit notice the client sends to the studio (success panel secondary action). */
+export function buildBookingNoticeLink(booking: Booking, phone: string): string | null {
+  if (!/^[0-9]+$/.test(phone)) return null;
 
   const lines = [
-    "Hola! Quiero reservar un turno de piercing:",
+    "Hola, acabo de solicitar una reserva en ALPIERCING:",
     "",
-    `Servicio: ${service.name}`,
-    `Categoría: ${service.category}`,
-    `Duración: ${service.durationMinutes} min`,
-    `Fecha: ${date}`,
-    `Hora: ${time}`,
+    `Servicio: ${booking.serviceName}`,
+    `Fecha: ${booking.date}`,
+    `Hora: ${booking.timeSlot}`,
     "",
-    `Precio: ${formatCents(service.priceCents)}`,
-    `Seña (50%): ${formatCents(deposit)}`,
-    `Saldo en el local: ${formatCents(balance)}`,
+    `Nombre: ${booking.clientName}`,
     "",
-    "Datos del cliente:",
-    `Nombre: ${clientName.trim()}`,
-    `WhatsApp: ${clientWhatsapp.trim()}`,
+    "¿Me confirman disponibilidad? ¡Gracias!",
   ];
 
-  if (notes && notes.trim()) lines.push(`Notas: ${notes.trim()}`);
-  lines.push("", "¿Me confirman disponibilidad para abonar la seña?");
+  return `https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
+/** Studio confirmation sent to the client after the operator approves the request. */
+export function buildBookingConfirmationLink(booking: Booking, phone: string): string | null {
+  if (!/^[0-9]+$/.test(phone)) return null;
+
+  const lines = [
+    `¡Hola ${booking.clientName}! Confirmamos tu turno en ALPIERCING:`,
+    "",
+    `Servicio: ${booking.serviceName}`,
+    `Fecha: ${booking.date}`,
+    `Hora: ${booking.timeSlot}`,
+    "",
+    "Te esperamos. ¡Gracias por reservar!",
+  ];
 
   return `https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`;
 }

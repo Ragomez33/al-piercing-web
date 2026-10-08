@@ -3,7 +3,10 @@
   import { ChevronLeft, ChevronRight, X } from "lucide-svelte";
   import { PIERCING_SERVICES } from "../../lib/data/services";
   import { DataError, dataStore } from "../../lib/data/store";
-  import type { Booking, TimeBlock } from "../../lib/types/domain";
+  import { approveBooking, cancelBooking } from "../../lib/services/booking";
+  import { buildBookingConfirmationLink } from "../../lib/utils/booking";
+  import { WHATSAPP_PHONE } from "../../lib/config";
+  import type { Booking, BookingStatus, TimeBlock } from "../../lib/types/domain";
   import {
     addDays,
     buildOccupancies,
@@ -30,6 +33,15 @@
   let rescheduling = $state(false);
   let reDate = $state("");
   let reSlots = $state<string[]>([]);
+  let approving = $state(false);
+  let cancelling = $state(false);
+  let confirmationUrl = $state<string | null>(null);
+
+  const STATUS_LABELS: Record<BookingStatus, string> = {
+    PENDING: "Pendiente",
+    CONFIRMED: "Confirmado",
+    CANCELLED: "Cancelado",
+  };
 
   // Block modals
   let creating = $state(false);
@@ -134,35 +146,51 @@
     selected = booking;
     actionError = "";
     rescheduling = false;
+    approving = false;
+    cancelling = false;
+    // Already-confirmed bookings keep the confirmation link re-sendable (FR-011).
+    confirmationUrl =
+      booking.status === "CONFIRMED"
+        ? buildBookingConfirmationLink(booking, WHATSAPP_PHONE)
+        : null;
   }
 
   function closeBooking() {
     selected = null;
     rescheduling = false;
+    confirmationUrl = null;
   }
 
-  // --- Booking actions ---
-  async function confirmSeña() {
-    if (!selected) return;
+  // --- Booking actions (transitions delegated to the domain service, §IV) ---
+  async function approveCita() {
+    if (!selected || approving) return;
     actionError = "";
+    approving = true;
     try {
-      bookings = await dataStore.updateBookingStatus(selected.id, "CONFIRMED");
-      selected = null;
+      const result = await approveBooking(selected.id, WHATSAPP_PHONE);
+      selected = result.booking;
+      confirmationUrl = result.confirmationUrl;
       await reload();
     } catch (err) {
-      actionError = err instanceof DataError ? err.message : "No se pudo confirmar";
+      actionError = err instanceof DataError ? err.message : "No se pudo aprobar la cita";
+    } finally {
+      approving = false;
     }
   }
 
   async function cancelCita() {
-    if (!selected) return;
+    if (!selected || cancelling) return;
     actionError = "";
+    cancelling = true;
     try {
-      await dataStore.updateBookingStatus(selected.id, "CANCELLED");
+      await cancelBooking(selected.id);
       selected = null;
+      confirmationUrl = null;
       await reload();
     } catch (err) {
       actionError = err instanceof DataError ? err.message : "No se pudo cancelar";
+    } finally {
+      cancelling = false;
     }
   }
 
@@ -280,16 +308,19 @@
                 <span class="ev-title">{block.label}</span>
               </button>
             {/each}
-            {#each bookings.filter((b) => b.date === day.date && b.status !== "CANCELLED") as booking (booking.id)}
+            {#each bookings.filter((b) => b.date === day.date) as booking (booking.id)}
               <button
                 type="button"
                 class="card booking {booking.status.toLowerCase()}"
                 style={`top: ${topForTime(booking.timeSlot)}px; height: ${heightForMinutes(durationFor(booking.serviceId))}px;`}
                 onclick={(e) => { e.stopPropagation(); openBooking(booking); }}
-                aria-label={`${booking.timeSlot} ${booking.clientName} ${booking.serviceName}`}
+                aria-label={`${booking.timeSlot} ${booking.clientName} ${booking.serviceName} ${STATUS_LABELS[booking.status]}`}
               >
                 <span class="ev-time">{booking.timeSlot}</span>
                 <span class="ev-title">{booking.clientName} ({booking.serviceName})</span>
+                <span class="ev-badge badge badge-{booking.status.toLowerCase()}">
+                  {STATUS_LABELS[booking.status]}
+                </span>
               </button>
             {/each}
           </div>
@@ -327,19 +358,28 @@
       <dt>Saldo en el local</dt>
       <dd>{formatCents(selected.priceCents - selected.depositCents)}</dd>
       <dt>Estado</dt>
-      <dd><span class="badge badge-{selected.status.toLowerCase()}">{selected.status}</span></dd>
+      <dd><span class="badge badge-{selected.status.toLowerCase()}">{STATUS_LABELS[selected.status]}</span></dd>
     </dl>
 
     {#if !rescheduling}
       <div class="actions">
         {#if selected.status === "PENDING"}
-          <button type="button" class="primary" onclick={confirmSeña}>Confirmar Seña</button>
+          <button type="button" class="primary" onclick={approveCita} disabled={approving}>
+            {approving ? "Aprobando…" : "Aprobar Cita"}
+          </button>
         {/if}
         <button type="button" class="ghost" onclick={startReschedule}>Reagendar</button>
         {#if selected.status !== "CANCELLED"}
-          <button type="button" class="danger" onclick={cancelCita}>Cancelar Cita</button>
+          <button type="button" class="danger" onclick={cancelCita} disabled={cancelling}>
+            {cancelling ? "Cancelando…" : "Cancelar Cita"}
+          </button>
         {/if}
       </div>
+      {#if selected.status === "CONFIRMED" && confirmationUrl}
+        <a class="wa-link" href={confirmationUrl} target="_blank" rel="noopener noreferrer">
+          Notificar confirmación por WhatsApp
+        </a>
+      {/if}
     {:else}
       <div class="reschedule">
         <label class="field" for="re-date">Nueva fecha</label>
@@ -561,6 +601,12 @@
     color: var(--text-secondary);
   }
 
+  .card.booking.cancelled {
+    background: var(--status-cancelled-bg);
+    border: 1px dashed var(--accent-negative);
+    color: var(--text-muted);
+  }
+
   .card.block {
     background: var(--bg-wood-pill);
     border: 1px dashed var(--accent-wood);
@@ -576,6 +622,13 @@
   .ev-title {
     font-size: 0.72rem;
     line-height: 1.2;
+  }
+
+  .ev-badge {
+    align-self: flex-start;
+    margin-top: 0.1rem;
+    font-size: 0.6rem;
+    padding: 0.05rem 0.4rem;
   }
 
   .hint {
@@ -663,18 +716,21 @@
   }
 
   .badge-pending {
-    background: var(--bg-wood-pill);
-    color: var(--accent-gold);
+    background: var(--status-pending-bg);
+    color: var(--text-gold);
+    border: 1px solid var(--status-pending-edge);
   }
 
   .badge-confirmed {
-    background: var(--accent-positive-tint);
+    background: var(--status-confirmed-bg);
     color: var(--accent-positive);
+    border: 1px solid var(--status-confirmed-edge);
   }
 
   .badge-cancelled {
-    background: var(--accent-negative-tint);
+    background: var(--status-cancelled-bg);
     color: var(--accent-negative);
+    border: 1px solid var(--status-cancelled-edge);
   }
 
   .actions {
@@ -725,6 +781,36 @@
     background: transparent;
     color: var(--accent-negative);
     border: 1px solid var(--accent-negative);
+  }
+
+  .primary:disabled,
+  .ghost:disabled,
+  .danger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .wa-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.5rem 1.1rem;
+    margin-bottom: 0.75rem;
+    border-radius: var(--radius-btn);
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+  }
+
+  .wa-link:hover,
+  .wa-link:focus-visible {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 
   .reschedule {

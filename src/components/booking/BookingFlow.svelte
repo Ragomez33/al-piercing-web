@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { Clock } from "lucide-svelte";
   import { PIERCING_SERVICES, type PiercingService } from "../../lib/data/services";
-  import { buildBookingWhatsAppLink } from "../../lib/utils/booking";
+  import { submitBookingRequest } from "../../lib/services/booking";
   import { calcDepositCents, formatCents } from "../../lib/utils/money";
   import { PAYMENT_BINANCE_PAY, PAYMENT_PAGO_MOVIL, WHATSAPP_PHONE } from "../../lib/config";
   import { DataError, dataStore } from "../../lib/data/store";
@@ -21,8 +21,43 @@
   let submitError = $state("");
   let submitting = $state(false);
 
+  // Success panel (feature 009)
+  let successOpen = $state(false);
+  let noticeUrl = $state<string | null>(null);
+  let successModal = $state<HTMLElement | null>(null);
+  let lastFocused: HTMLElement | null = null;
+
   const today = localISODate();
   const slots = agendaTimes();
+
+  function closeSuccess() {
+    successOpen = false;
+    noticeUrl = null;
+    lastFocused?.focus();
+    lastFocused = null;
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (successOpen && event.key === "Escape") closeSuccess();
+  }
+
+  // Move focus into the dialog when it opens (booking-flow-contract §2).
+  $effect(() => {
+    if (successOpen && successModal) successModal.focus();
+  });
+
+  async function refreshAvailability() {
+    if (!date) return;
+    try {
+      const [booked, blocked] = await Promise.all([
+        dataStore.getBookedSlots(date),
+        dataStore.getBlockedSlots(date),
+      ]);
+      bookedSlots = [...new Set([...booked, ...blocked])];
+    } catch {
+      // Keep the last known availability on transient read failures.
+    }
+  }
 
   async function onDateChange() {
     time = "";
@@ -79,35 +114,45 @@
     if (!selected || !formValid || submitting) return;
     submitting = true;
     submitError = "";
+    const submittedTime = time;
     try {
-      // Persist FIRST, then open WhatsApp (FR-006).
-      await dataStore.createBooking({
-        clientName: clientName.trim(),
-        clientWhatsapp: clientWhatsapp.trim(),
-        serviceId: selected.id,
-        serviceName: selected.name,
-        priceCents: selected.priceCents,
-        date,
-        timeSlot: time,
-        notes: notes.trim() || undefined,
-      });
+      // Persist FIRST as PENDING, then offer WhatsApp as a deliberate secondary
+      // action on the success panel (FR-001/FR-003/FR-004).
+      const result = await submitBookingRequest(
+        {
+          clientName: clientName.trim(),
+          clientWhatsapp: clientWhatsapp.trim(),
+          serviceId: selected.id,
+          serviceName: selected.name,
+          priceCents: selected.priceCents,
+          date,
+          timeSlot: submittedTime,
+          notes: notes.trim() || undefined,
+        },
+        WHATSAPP_PHONE,
+      );
+
+      // Immediately hold the slot in the public view (no refetch) and clear the
+      // client form so the same data cannot be resubmitted (FR-005/FR-006).
+      bookedSlots = bookedSlots.includes(submittedTime)
+        ? bookedSlots
+        : [...bookedSlots, submittedTime];
+      clientName = "";
+      clientWhatsapp = "";
+      notes = "";
+      time = "";
+
+      noticeUrl = result.noticeUrl;
+      lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      successOpen = true;
     } catch (err) {
+      // Persistence failed: no WhatsApp, visible error, retryable (FR-007).
       submitError =
         err instanceof DataError ? err.message : "No se pudo registrar la cita. Intentalo de nuevo.";
+      await refreshAvailability();
+    } finally {
       submitting = false;
-      return;
     }
-    submitting = false;
-    const link = buildBookingWhatsAppLink({
-      phone: WHATSAPP_PHONE,
-      service: selected,
-      date,
-      time,
-      clientName,
-      clientWhatsapp,
-      notes,
-    });
-    if (link) window.open(link, "_blank", "noopener,noreferrer");
   }
 
   onMount(() => {
@@ -120,6 +165,8 @@
     }
   });
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <section class="services" aria-labelledby="services-title">
   <h2 id="services-title">1. Elegí tu servicio</h2>
@@ -252,12 +299,34 @@
       {/if}
 
       <button type="submit" class="submit" disabled={!formValid || submitting}>
-        Confirmar turno por WhatsApp
+        {submitting ? "Procesando reserva…" : "Solicitar turno"}
       </button>
       {#if !formValid}
         <p class="hint">Completá nombre, WhatsApp, fecha y hora para continuar.</p>
       {/if}
     </form>
+  </section>
+{/if}
+
+{#if successOpen}
+  <div class="success-backdrop" role="presentation"></div>
+  <section
+    class="success-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="success-title"
+    tabindex="-1"
+    bind:this={successModal}
+  >
+    <h2 id="success-title">
+      Solicitud enviada con éxito. El estudio verificará tu cupo a la brevedad.
+    </h2>
+    {#if noticeUrl}
+      <a class="success-wa" href={noticeUrl} target="_blank" rel="noopener noreferrer">
+        Enviar comprobante / aviso por WhatsApp
+      </a>
+    {/if}
+    <button type="button" class="success-close" onclick={closeSuccess}>Nueva solicitud</button>
   </section>
 {/if}
 
@@ -544,5 +613,84 @@
     font-size: 0.85rem;
     margin: 0.75rem 0 0;
     text-align: center;
+  }
+
+  /* Success panel (feature 009) */
+  .success-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay-backdrop);
+    z-index: 40;
+  }
+
+  .success-modal {
+    position: fixed;
+    z-index: 41;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(440px, calc(100% - 2rem));
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .success-modal:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 3px;
+  }
+
+  .success-modal h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+  }
+
+  .success-wa {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.5rem 1.1rem;
+    border-radius: var(--radius-btn);
+    background: transparent;
+    color: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+  }
+
+  .success-wa:hover,
+  .success-wa:focus-visible {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .success-close {
+    min-height: 44px;
+    border-radius: var(--radius-btn);
+    border: none;
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-glow);
+  }
+
+  .success-close:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 </style>

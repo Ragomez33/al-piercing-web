@@ -72,6 +72,11 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - `accent-positive` (Confirmado / Seña recibida): `#34D399`.
 - `accent-gold` (Pendiente por validar / stock bajo): `#E5A93C`.
 - `accent-negative` (Cancelado / agotado): `#F87171`.
+- **Booking status badges (feature 009)** — semantic aliases over the palette above; components
+  consume these, never raw hex:
+  - `status-pending-bg` / `status-pending-edge`: amber/orange (`bg-wood-pill` + `accent-gold`).
+  - `status-confirmed-bg` / `status-confirmed-edge`: green-gold (`accent-positive-tint` + `accent-gold`).
+  - `status-cancelled-bg` / `status-cancelled-edge`: red/muted (`accent-negative-tint` + `accent-negative`).
 
 ### Typography & Text
 - `text-primary`: `#F4F4F5` — maximum readability on dark surfaces.
@@ -167,6 +172,24 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   (`aria-pressed="true"`).
 - **Unavailable:** `--bg-surface-elevated` background, `--text-muted` text, `disabled`.
 - Times use `tabular-nums` (`14:30`).
+
+### Booking Success Panel (feature 009) — implemented
+- Submitting the booking form **persists first**; WhatsApp no longer auto-opens. On success a
+  modal panel (`role="dialog"`, `aria-modal`, labelled) shows the exact reassurance copy
+  **"Solicitud enviada con éxito. El estudio verificará tu cupo a la brevedad."**
+- The panel exposes a secondary **"Enviar comprobante / aviso por WhatsApp"** link
+  (`--accent-primary` outline on transparent, gold fill on hover, ≥44px) and a primary
+  **"Nueva solicitud"** dismiss button (`--accent-primary` fill, `--accent-on` text).
+- The submitted date/time is added to the unavailable set immediately and the form is cleared.
+
+### Admin Booking Status Badges & Actions (feature 009) — implemented
+- Calendar cards and the detail modal render a status badge using the `status-*` tokens:
+  `PENDING` → **Pendiente** (amber/orange), `CONFIRMED` → **Confirmado** (green-gold),
+  `CANCELLED` → **Cancelado** (red/muted). Cancelled rows render muted in the grid.
+- Only `PENDING` offers **Aprobar Cita** (`--accent-primary`); `PENDING`/`CONFIRMED` offer
+  **Cancelar Cita** (`--accent-negative` outline). Buttons disable while an action is in flight.
+- Approving a request produces a re-sendable **"Notificar confirmación por WhatsApp"** link
+  (`--accent-primary` outline, ≥44px) for the client. Cancel releases the slot.
 
 ### Product Cards (Catalog) — implemented
 - Square image tile (`--radius-image`, `--bg-surface-elevated`) with `data-fallback` (dark/gold

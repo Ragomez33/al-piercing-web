@@ -27,6 +27,15 @@
   --accent-positive-tint: rgba(52, 211, 153, 0.15);
   --accent-negative-tint: rgba(248, 113, 113, 0.15);
 
+  /* Booking status badges (feature 009) — semantic aliases over the status palette.
+     PENDING = amber/orange, CONFIRMED = green-gold, CANCELLED = red/muted. */
+  --status-pending-bg: var(--bg-wood-pill);
+  --status-pending-edge: var(--accent-gold);
+  --status-confirmed-bg: var(--accent-positive-tint);
+  --status-confirmed-edge: var(--accent-gold);
+  --status-cancelled-bg: var(--accent-negative-tint);
+  --status-cancelled-edge: var(--accent-negative);
+
   /* Typography & Text */
   --text-primary: #F4F4F5;
   --text-secondary: #A1A1AA;

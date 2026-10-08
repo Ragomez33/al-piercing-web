@@ -80,6 +80,18 @@ function requireRow<T>(data: T | null, label: string): T {
   return data;
 }
 
+/**
+ * Maps Postgres errors to typed, user-facing `DataError`s (feature 009).
+ * A unique-violation (`23505`) on the active-slot partial index becomes the
+ * friendly duplicate-slot message (research R7, FR-007/FR-012).
+ */
+function toDataError(error: { message: string; code?: string }): DataError {
+  if (error.code === "23505") {
+    return new DataError("Ese horario ya fue solicitado. Elegí otro horario.");
+  }
+  return new DataError(error.message);
+}
+
 export function createSupabaseAdapter(): DataStore {
   const mode: DataMode = "production";
 
@@ -149,7 +161,7 @@ export function createSupabaseAdapter(): DataStore {
         })
         .select()
         .single();
-      if (error) throw new DataError(error.message);
+      if (error) throw toDataError(error);
       return toBooking(requireRow(data, "La reserva"));
     },
 
@@ -210,7 +222,7 @@ export function createSupabaseAdapter(): DataStore {
         .eq("id", id)
         .select()
         .single();
-      if (error) throw new DataError(error.message);
+      if (error) throw toDataError(error);
       return toBooking(requireRow(data, "La reserva"));
     },
 

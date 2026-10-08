@@ -8,17 +8,20 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | --- | --- | --- |
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
-| `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50% → mensaje pre-llenado a WhatsApp |
-| `/admin` | Panel | Protegido por login (Supabase Auth): **Calendario** semanal (citas por bloque, confirmar/reagendar/cancelar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
+| `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
 
 ## Datos (capa híbrida)
 
 Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
-  `localStorage` (`alpi:bookings:v1` / `alpi:products:v1`) sembrado con el contenido estático.
-- **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migración en
-  `supabase/migrations/0001_init.sql`).
+  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1`) sembrado con el contenido estático.
+- **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
+  `supabase/migrations/`, incluyendo `0006_release_cancelled_slots.sql`, que libera el horario al cancelar).
+- Las transiciones de estado de las reservas pasan por el servicio de dominio
+  `src/lib/services/booking.ts` (`submitBookingRequest` / `approveBooking` / `cancelBooking`); los
+  componentes no llaman a Supabase directamente.
 
 ## Estructura
 
@@ -39,6 +42,7 @@ src/
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PIERCING_SERVICES (menú fijo)
+│   ├── services/booking.ts           # Servicio de dominio (persistir/aprobar/cancelar + links WhatsApp)
 │   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/DataStore
 │   └── utils/{money,booking,dates}.ts
 ├── pages/{index,catalog,booking,admin}.astro
