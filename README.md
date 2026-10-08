@@ -68,9 +68,21 @@ dígitos con código de país).
 npm install
 npm run dev       # servidor de desarrollo
 npm run check     # astro check (TypeScript estricto)
+npm run lint      # ESLint (Svelte + TS)
 npm run build     # build estático a dist/
 npm run preview
 ```
+
+> **Troubleshooting**: si en el navegador ves errores `ERR_ABORTED 504 (Outdated Optimize Dep)` o
+> islands que no hidratan (ej. `/admin` colgado en "Verificando sesión…"), la caché de optimización
+> de Vite está desactualizada. Detené el dev server y ejecutá:
+>
+> ```bash
+> Remove-Item -Recurse -Force node_modules/.vite .astro   # PowerShell
+> npm run dev
+> ```
+>
+> Luego recargá la pestaña con `Ctrl+Shift+R`.
 
 ## Deploy
 
