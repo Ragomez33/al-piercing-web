@@ -146,7 +146,7 @@ with config present the same flows hit the live backend (quickstart S1/S2).
 - [x] T030 [P] Performance/island audit — only `AdminPanel`, `CatalogGrid`, `BookingFlow`, `CartDrawer` and the canvas hydrate (principle I)
 - [x] T031 [P] Update docs — `design-system.md` admin module + `README.md` modules table to describe the data layer, PIN gate and tabs
 - [x] T032 Run final validation against quickstart.md S1–S10 plus `npx astro check` and `npm run build` at repository root — all MUST pass with zero errors and zero warnings (FR-020/SC-007)
-- [ ] T033 Commit the feature
+- [x] T033 Commit the feature
 
 ---
 
