@@ -62,3 +62,18 @@ npm run check     # astro check (TypeScript estricto)
 npm run build     # build estático a dist/
 npm run preview
 ```
+
+## Deploy
+
+Salida estática (`dist/`). `vercel.json` y `netlify.toml` ya fueron preparados (Vercel/Netlify
+autodetectan Astro).
+
+1. Copiar `.env.example` y completar las variables (en Vercel → *Project → Settings →
+   Environment Variables*; en Netlify → *Site configuration → Environment variables*).
+2. Dejar `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY` **vacías** para el **Modo Demo**
+   (persistencia en `localStorage` del navegador).
+3. Para **Modo Producción** con Supabase:
+   - Crear el proyecto en Supabase.
+   - Aplicar `supabase/migrations/0001_init.sql` (SQL Editor o `supabase db push`).
+   - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
+4. Build: `npm run build` (directorio de publicación: `dist`).
