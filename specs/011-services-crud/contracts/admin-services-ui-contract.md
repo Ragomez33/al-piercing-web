@@ -3,7 +3,8 @@
 **Feature**: 011-services-crud
 
 Governs the new **Servicios** section in `src/components/admin/AdminPanel.svelte` (existing `client:load`
-island, dashboard shell from feature 010). Follows the Inventario patterns.
+island, dashboard shell from feature 010). Follows the Inventario patterns and provides full CRUD
+(create, edit, activate/deactivate and delete).
 
 ## 1. Navigation
 
@@ -36,14 +37,17 @@ island, dashboard shell from feature 010). Follows the Inventario patterns.
 ## 4. Edit
 
 - Each row offers **Editar**, opening the same modal pre-filled; submit calls
-  `dataStore.updateService(id, patch)` and reloads.
+  `dataStore.updateService(id, patch)` and reloads. The service `id` is a UUID and is never edited.
 
-## 5. Activate / Deactivate
+## 5. Activate / Deactivate / Delete
 
 - A toggle per row (like the product `published` switch) calls
   `dataStore.updateService(id, { active: !active })`.
 - Deactivated services remain listed (marked inactive) and can be reactivated; they disappear from the
   public booking menu (booking-menu-contract §2).
+- A **Eliminar** action per row (destructive, behind a confirmation step) calls
+  `dataStore.deleteService(id)`; on success the row is removed and the list reloads. Existing bookings
+  keep their snapshot (`service_id` becomes `null`).
 - Buttons/toggles disable while their action is in flight (no double submit).
 
 ## 6. Validation & integrity

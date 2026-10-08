@@ -11,7 +11,8 @@ Governs how `src/components/booking/BookingFlow.svelte` obtains and renders the 
    `aria-live="polite"`).
 3. On success, render the list; on empty result, render an elegant empty state
    ("No hay servicios disponibles por el momento.").
-4. Resolve a `?service=<id>` deep link **after** the list loads (select the matching service if present).
+4. Resolve a `?service=<uuid>` deep link **after** the list loads (select the matching service if present).
+5. The component MUST NOT import the hardcoded `PIERCING_SERVICES` constant for rendering.
 
 ## 2. Rendered list
 
@@ -23,9 +24,10 @@ Governs how `src/components/booking/BookingFlow.svelte` obtains and renders the 
 
 ## 3. Fallback on failure (demo parity)
 
-- If the read **fails**, the component MUST fall back to the seed `PIERCING_SERVICES` (filtered to
-  `active = true`) so the menu is never blank, and show a non-blocking notice (e.g. "No se pudo cargar la
-  lista en línea; mostrando el menú local.").
+- If the read **fails**, the component MUST fall back to the demo seed exposed by the **data layer** (the
+  local adapter's `listServices()`, filtered to `active = true`) so the menu is never blank, and show a
+  non-blocking notice (e.g. "No se pudo cargar la lista en línea; mostrando el menú local."). It MUST NOT
+  import the hardcoded `PIERCING_SERVICES` constant itself.
 - This is the "modo demo si la db no responde o da error" behavior; it applies in both demo and production.
 
 ## 4. Submission (unchanged)
@@ -37,6 +39,7 @@ Governs how `src/components/booking/BookingFlow.svelte` obtains and renders the 
 ## 5. Invariants
 
 - Money is integer cents; deposit is 50% of the price.
-- Components do not call Supabase directly; all reads go through `dataStore`.
+- Components do not call Supabase directly; all reads go through `dataStore`. No component imports the
+  hardcoded service list for rendering.
 - No new island/hydration is added (`BookingFlow` stays `client:load`).
 - Accented names/descriptions are preserved in the UI and in WhatsApp messages.

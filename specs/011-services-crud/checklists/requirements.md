@@ -34,8 +34,9 @@
 - Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`.
 - No `[NEEDS CLARIFICATION]` markers were needed: the request was explicit ("misma forma que el catálogo")
   and reasonable defaults were applied (documented in Assumptions): hybrid source with demo fallback,
-  soft-deactivate instead of hard delete, fixed category set, integer-cent money, and an initial seed
-  equal to today's menu.
+  full CRUD (create/edit/delete plus an `active` soft toggle), UUID identities, a real FK
+  `bookings.service_id → services(id) ON DELETE SET NULL`, fixed category set, integer-cent money, and an
+  initial seed equal to today's menu.
 - Concrete technology mapping (data layer, migrations, RLS, tokens) is deliberately deferred to
   `/speckit.plan`; the spec stays at the WHAT/WHY level.
 - Verification gate for implementation: `astro check` MUST pass with zero errors and existing

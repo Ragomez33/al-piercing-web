@@ -20,6 +20,7 @@ All `Technical Context` unknowns are resolved below. No `NEEDS CLARIFICATION` re
   - `listServices(input?: { includeInactive?: boolean }): Promise<PiercingService[]>`
   - `createService(input: NewServiceInput): Promise<PiercingService>`
   - `updateService(id: string, patch: Partial<NewServiceInput> & { active?: boolean }): Promise<PiercingService>`
+  - `deleteService(id: string): Promise<void>`
   The local adapter stores an array under `alpi:services:v1` (seeded with the current menu); the Supabase
   adapter reads/writes `public.services` through the shared typed client.
 - **Rationale**: Mirrors exactly how `products` are handled (`listProducts`/`createProduct`/
@@ -29,35 +30,45 @@ All `Technical Context` unknowns are resolved below. No `NEEDS CLARIFICATION` re
 - **Alternatives considered**: A new `ServiceStore` interface — rejected (the unified `DataStore` is the
   constitution's single data surface).
 
-## R3. Schema: migration `0008_services.sql`
+## R3. Schema: migration `0005_services.sql`
 
 - **Decision**: New table
-  `public.services(id text primary key, name text not null, category text not null check (category in
-  ('NOSTRIL','HELIX','NAVEL','TITANIO')), description text not null default '', price_cents integer not
-  null check (price_cents >= 0), duration_minutes integer not null check (duration_minutes > 0),
-  requires_deposit boolean not null default true, active boolean not null default true, created_at
-  timestamptz not null default now())`. RLS enabled; policies: `select` public where `active = true`;
-  `select` authenticated (all); `insert`/`update` authenticated. The migration seeds the current six
-  services with `on conflict (id) do nothing` (idempotent).
-- **Rationale**: Matches the `products` RLS model (public read, authenticated write) and keeps money as
-  integer cents. The seed makes production start equal to today's menu.
+  `public.services(id uuid primary key default gen_random_uuid(), name text not null, category text not
+  null check (category in ('NOSTRIL','HELIX','NAVEL','TITANIO')), description text not null default '',
+  price_cents integer not null check (price_cents >= 0), duration_minutes integer not null check
+  (duration_minutes > 0), requires_deposit boolean not null default true, active boolean not null default
+  true, created_at timestamptz not null default now())`. RLS enabled; policies: `select` public where
+  `active = true`; `select` authenticated (all); `insert`/`update`/`delete` authenticated. Then alter
+  `public.bookings.service_id` to `uuid` (nullable) and add
+  `foreign key (service_id) references public.services(id) on delete set null`. The migration seeds the
+  current six services with **fixed UUIDs** using `on conflict (id) do nothing` (idempotent).
+- **Rationale**: UUID PKs match the catalog's generated identity and avoid slug collisions/renames; the FK
+  makes the relationship real while `ON DELETE SET NULL` preserves existing bookings' snapshots (FR-017/
+  FR-018). It matches the `products` RLS model (public read, authenticated write) plus a delete policy for
+  the full admin CRUD. The seed makes production start equal to today's menu.
 - **Alternatives considered**: A JSON column on a generic table — rejected (no type safety, poor
-  queryability); hard delete policy — rejected (soft deactivation is the model, R4).
+  queryability); text slug PK — rejected by the requested model (UUID); FK `ON DELETE CASCADE`/`RESTRICT`
+  — rejected (would delete or block bookings; `SET NULL` keeps history).
 
 ## R4. Deactivate vs. delete
 
-- **Decision**: Implement **soft deactivation** via the `active` flag (`updateService(id, { active })`).
-  No hard delete is exposed.
-- **Rationale**: Bookings store a service snapshot; hard-deleting a referenced service adds no value and
-  risks confusing the admin. The spec asks for activate/deactivate.
-- **Alternatives considered**: Hard delete — rejected (history + referential safety).
+- **Decision**: Support **both**: soft deactivation via the `active` flag (`updateService(id, { active })`)
+  and a **hard delete** (`deleteService(id)`). The FK `bookings.service_id → services(id)` is
+  `ON DELETE SET NULL`, so deleting a referenced service preserves the booking (snapshot intact).
+- **Rationale**: The feature now requires full CRUD (create/edit/delete, FR-017) while `active` remains a
+  quick way to hide a service without losing it. `SET NULL` keeps booking history without blocking deletes.
+- **Alternatives considered**: Soft-delete only — rejected (user asked for full CRUD incl. delete);
+  `ON DELETE RESTRICT` — rejected (blocks deleting referenced services); `ON DELETE CASCADE` — rejected
+  (would delete booking history).
 
 ## R5. Booking flow: load active services with fallback
 
 - **Decision**: `BookingFlow.svelte` loads services via `dataStore.listServices()` (active only) in
   `onMount`, showing a short "Cargando servicios…" state and an empty state when none are active. If the
-  read **fails**, it falls back to the seed `PIERCING_SERVICES` (filtered to active) and shows a
-  non-blocking notice (FR-011/FR-012). The `?service=` deep link is resolved **after** the list loads.
+  read **fails**, it falls back to the demo seed exposed by the data layer (the local adapter's
+  `listServices()`, filtered to active) and shows a non-blocking notice (FR-011/FR-012). Components MUST
+  NOT import the hardcoded `PIERCING_SERVICES` constant for rendering. The `?service=<uuid>` deep link is
+  resolved **after** the list loads.
 - **Rationale**: Mirrors `CatalogGrid` (async load + fallback, never a blank screen) and keeps the
   selected service's price/deposit/duration driven by managed data (FR-010).
 - **Alternatives considered**: Keeping the constant — rejected (defeats the feature); blocking on error —
@@ -77,11 +88,12 @@ All `Technical Context` unknowns are resolved below. No `NEEDS CLARIFICATION` re
 - **Decision**: Add a third section to the `AdminPanel` sidebar nav (`Servicios`) that renders a list of
   services (name, category, price, duration, active state) and a form/modal to create or edit, following
   the **Inventario** patterns (toolbar + "Nuevo" button, inline rows, modal form, `role="alert"` errors,
-  busy/disabled states). Activate/deactivate via a toggle like `published`.
+  busy/disabled states). Each row offers activate/deactivate (toggle like `published`) **and delete** (with
+  a confirmation step, since it is destructive).
 - **Rationale**: Consistent UX and reuse of the `.input`/`.field`/card tokens; the sidebar already
   supports active-state sections (feature 010).
 - **Alternatives considered**: A separate route — rejected (routing/shell churn; the spec wants a section
-  like the others).
+  like the others); delete without confirmation — rejected (destructive action).
 
 ## R8. Demo vs. production selection & fallback semantics
 

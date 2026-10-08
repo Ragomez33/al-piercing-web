@@ -11,14 +11,17 @@
 Turn the piercing service menu into **managed data**, mirroring the catalog pattern:
 
 - Extend the hybrid data layer with `services` operations (`listServices`, `createService`,
-  `updateService`) backed by **localStorage** in demo mode and the **`public.services`** table in
-  production, seeded with today's menu so behavior is unchanged initially.
-- Add migration `0008_services.sql` (table `services`, RLS: public read of active rows, authenticated
-  write) plus the `services` block in `src/types/supabase.ts`.
+  `updateService`, `deleteService`) backed by **localStorage** in demo mode and the **`public.services`**
+  table in production, seeded with today's menu so behavior is unchanged initially.
+- Add migration `0005_services.sql` (table `services` with `id uuid default gen_random_uuid()`, RLS:
+  public read of active rows, authenticated write **and delete**) plus the `services` block in
+  `src/types/supabase.ts`; the same migration adds the real FK
+  `bookings.service_id → services(id) ON DELETE SET NULL`.
 - Add a **Servicios** section to the admin shell (sidebar) with full CRUD: list (active + inactive),
-  create, edit, and activate/deactivate. Soft-deactivate instead of hard delete.
-- Make the public booking flow load services from the data layer (only active ones), with a
-  loading/empty state and a **fallback to the seed menu** if the query fails (demo parity).
+  create, edit, activate/deactivate and **delete**.
+- Make the public service UI (`BookingFlow` and the landing service menu) load services from the data
+  layer (only active ones) instead of importing the hardcoded `PIERCING_SERVICES` constant, with a
+  loading/empty state and a **fallback to the demo seed** if the query fails (demo parity).
 - Resolve booking slot durations from managed service data (booking flow + admin calendar) instead of a
   hardcoded constant.
 
@@ -31,10 +34,12 @@ Turn the piercing service menu into **managed data**, mirroring the catalog patt
 No new dependencies.
 
 **Storage**: Supabase Postgres `public.services` (production) / browser `localStorage`
-(`alpi:services:v1`, demo). New table: `services(id text pk, name text, category text check(...),
-description text, price_cents integer ≥ 0, duration_minutes integer > 0, requires_deposit boolean,
-active boolean, created_at timestamptz)`. RLS: public `SELECT` where `active = true`; authenticated
-`SELECT` all + `INSERT`/`UPDATE`. Migration `0008_services.sql` also seeds the current menu idempotently.
+(`alpi:services:v1`, demo). New table: `services(id uuid pk default gen_random_uuid(), name text, category
+text check(...), description text, price_cents integer ≥ 0, duration_minutes integer > 0, requires_deposit
+boolean, active boolean, created_at timestamptz)`. RLS: public `SELECT` where `active = true`;
+authenticated `SELECT` all + `INSERT`/`UPDATE`/`DELETE`. Migration `0005_services.sql` also alters
+`bookings.service_id` to `uuid` and adds `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET
+NULL`, and seeds the current menu idempotently (fixed UUIDs).
 
 **Testing**: `npx astro check` (type gate, zero errors — explicit user requirement), `npm run build`,
 `npm run lint`, and the manual scenarios in `quickstart.md`. No unit-test runner is installed.
@@ -68,7 +73,7 @@ Governed by `constitution.md` v1.1.0 (supreme) and `.specify/memory/constitution
 | IV. Booking & Financial Integrity | PASS | Money stays integer cents; deposit stays 50%. Slot exclusivity/transition rules untouched; the booking snapshot (`serviceName`/`priceCents`) is preserved, so later service edits don't rewrite history. |
 | V. Mobile-First, Accessible & Zero Overhead UX | PASS | Admin list/form use labeled controls, ≥44px targets, visible focus, reduced motion; empty/loading/error states; no horizontal scroll 320–1920px. |
 | Data Access (Workflow) | PASS | Components read/write through the shared `dataStore`; no direct Supabase calls in `.svelte`. |
-| Schema Control (Workflow) | PASS | The new table ships as migration `0008_services.sql` and is reflected in `src/types/supabase.ts` before UI wiring. |
+| Schema Control (Workflow) | PASS | The new table ships as migration `0005_services.sql` (including the `bookings.service_id` FK) and is reflected in `src/types/supabase.ts` before UI wiring. |
 
 **Gate result**: PASS with no unjustified violations.
 
@@ -79,7 +84,7 @@ Governed by `constitution.md` v1.1.0 (supreme) and `.specify/memory/constitution
 | II. Token-Driven Styling | PASS | Admin Servicios contract forbids raw values; reuses `.input`/`.field` and card tokens. |
 | III. Type-Safe | PASS | Contracts fix `NewServiceInput` fields, validation and the `listServices({ includeInactive })` signature; `astro check` is the gate. |
 | IV. Integrity | PASS | Contract keeps integer cents and the 50% deposit; bookings remain snapshots. |
-| Data Access / Schema Control | PASS | Single `dataStore` surface; migration `0008` + generated-type update precede UI. |
+| Data Access / Schema Control | PASS | Single `dataStore` surface; migration `0005` + generated-type update precede UI. |
 
 No new violations were introduced by the design.
 
@@ -107,20 +112,25 @@ src/
 ├── components/
 │   ├── booking/
 │   │   └── BookingFlow.svelte          # MODIFY: load active services from dataStore
-│   │                                    #         (loading/empty/fallback states)
-│   └── admin/
-│       ├── AdminPanel.svelte           # MODIFY: add "Servicios" sidebar section + CRUD UI
-│       └── AdminCalendar.svelte        # MODIFY: resolve durations from loaded services
+│   │                                    #         (loading/empty/fallback states; no PIERCING_SERVICES import)
+│   ├── admin/
+│   │   ├── AdminPanel.svelte           # MODIFY: add "Servicios" sidebar section + full CRUD (incl. delete)
+│   │   └── AdminCalendar.svelte        # MODIFY: resolve durations from loaded services
+│   └── catalog/
+│       └── CatalogGrid.svelte          # (products grid — NOT a services consumer; no change)
+├── pages/
+│   └── index.astro                     # MODIFY: landing service menu uses dataStore.listServices()
+│                                        #         (no hardcoded PIERCING_SERVICES import)
 ├── lib/
 │   ├── data/
-│   │   ├── services.ts                 # MODIFY: add `active` to the seed; keep categories
-│   │   ├── adapters/local.ts           # MODIFY: services localStorage CRUD (alpi:services:v1)
-│   │   └── adapters/supabase.ts        # MODIFY: services table CRUD (typed rows)
-│   └── types/domain.ts                 # MODIFY: extend PiercingService/DataStore; NewServiceInput
-├── types/supabase.ts                   # MODIFY: add the `services` table types
+│   │   ├── services.ts                 # MODIFY: keep the seed + types; components stop importing the constant
+│   │   ├── adapters/local.ts           # MODIFY: services localStorage CRUD (alpi:services:v1) + deleteService
+│   │   └── adapters/supabase.ts        # MODIFY: services table CRUD (typed rows) + deleteService
+│   └── types/domain.ts                 # MODIFY: extend PiercingService/DataStore; NewServiceInput; deleteService
+├── types/supabase.ts                   # MODIFY: add the `services` table types (uuid id) + FK relationship
 supabase/
 └── migrations/
-    └── 0008_services.sql               # NEW: services table + RLS + seed
+    └── 0005_services.sql               # NEW: services table (uuid) + RLS + bookings FK + seed
 design-system.md / README.md            # MODIFY: document the Servicios section + hybrid source
 ```
 

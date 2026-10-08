@@ -8,7 +8,7 @@ End-to-end validation for the managed service menu. Details live in [contracts/]
 - Node `>=22.12.0`, npm. Install deps: `npm install`.
 - **Demo mode** (default): no env vars needed.
 - **Production mode** (optional): set `PUBLIC_SUPABASE_URL` + `PUBLIC_SUPABASE_ANON_KEY`, apply migration
-  `0008_services.sql` (`supabase db push`), and sign in at `/admin`.
+  `0005_services.sql` (`supabase db push`), and sign in at `/admin`.
 
 ## Setup / commands
 
@@ -40,8 +40,8 @@ npm run lint      # eslint MUST be clean
 ### S4 — Create a service (US1)
 1. Activate **Nuevo Servicio**, fill valid fields (name, category, description, price in cents, duration,
    require deposit) and submit.
-2. **Expected**: the modal closes, the service appears in the list and — on visiting `/booking` — in the
-   public menu. (admin-services-ui-contract §3, SC-001)
+2. **Expected**: the modal closes, the service appears in the list (with a generated UUID id) and — on
+   visiting `/booking` — in the public menu. (admin-services-ui-contract §3, SC-001)
 
 ### S5 — Edit a service (US1)
 1. Edit an existing service (e.g., change price/duration) and save.
@@ -53,27 +53,33 @@ npm run lint      # eslint MUST be clean
 2. **Expected**: it stays visible (inactive) in admin but is **absent** from `/booking`; reactivating it
    brings it back to the public menu. (SC-003)
 
-### S7 — Validation errors (US1)
+### S7 — Delete a service (US1)
+1. Delete a service in admin (through the confirmation step).
+2. **Expected**: it disappears from admin and from `/booking`. Any booking previously created against it
+   remains intact: `bookings.service_id` becomes `null` and the stored name/price snapshot is preserved
+   (query the table in production). (admin-services-ui-contract §5, FR-017, SC-008)
+
+### S8 — Validation errors (US1)
 1. Try to submit with an empty name, a non-integer/negative price, or a duration ≤ 0.
 2. **Expected**: a clear `role="alert"` message is shown and nothing is persisted.
    (admin-services-ui-contract §6)
 
-### S8 — Demo mode persistence (US3)
-1. Run without backend configuration; create/edit a service in admin; reload the page.
+### S9 — Demo mode persistence (US3)
+1. Run without backend configuration; create/edit/delete a service in admin; reload the page.
 2. **Expected**: changes persist locally (`alpi:services:v1`) and the booking menu reflects them.
    (SC-005)
 
-### S9 — Fallback on backend failure (US3)
+### S10 — Fallback on backend failure (US3)
 1. In production mode, force the services query to fail (e.g. unreachable DB).
-2. **Expected**: `/booking` still shows a usable menu (seed fallback) with a non-blocking notice rather
-   than a blank list. (booking-menu-contract §3)
+2. **Expected**: `/booking` still shows a usable menu (demo-seed fallback served by the data layer) with a
+   non-blocking notice rather than a blank list. (booking-menu-contract §3)
 
-### S10 — Empty catalog (edge)
+### S11 — Empty catalog (edge)
 1. Deactivate all services.
 2. **Expected**: `/booking` shows an elegant empty state; admin still lists them as inactive and can
    reactivate. (booking-menu-contract §1)
 
-### S11 — Regressions & gates (FR-016)
+### S12 — Regressions & gates (FR-016)
 1. Re-run prior journeys: booking submit + success panel, admin calendar approve/cancel/reschedule
    (durations still correct), catalog/cart.
 2. Run `npx astro check`, `npm run build`, `npm run lint`.
@@ -85,4 +91,4 @@ npm run lint      # eslint MUST be clean
 - `npx astro check` → **0 errors** (explicit user requirement).
 - `npm run build` and `npm run lint` succeed.
 - No new `client:*` directives; no Tailwind; money stays integer cents; `PiercingService`/`DataStore`
-  remain the shared types.
+  remain the shared types; no component imports the hardcoded service list.
