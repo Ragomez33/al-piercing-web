@@ -37,7 +37,7 @@ const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
     <main id="main">
       <slot />
     </main>
-    <Footer />
+    {!isAdmin && <Footer />}
   </body>
 </html>
 
@@ -62,12 +62,13 @@ const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
     pointer-events: none;
   }
 
-  /* Lavender-to-White gradient in the first ~third of the viewport height. */
+  /* Warm gold sheen in the first ~third of the viewport height. Layer 0 keeps it
+     behind <main> (which has no numeric z-index so overlays are not trapped). */
   .top-gradient {
     position: fixed;
     inset: 0 0 auto 0;
     height: 34vh;
-    z-index: 1;
+    z-index: 0;
     pointer-events: none;
     background: linear-gradient(
       180deg,
@@ -79,7 +80,8 @@ const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
 
   main {
     position: relative;
-    z-index: 2;
+    /* No numeric z-index: avoids a stacking context so modals/drawers rendered
+       inside <main> can paint above the sticky header (feature 010). */
     /* Grow to fill the viewport so the global footer stays at the bottom. */
     flex: 1 0 auto;
     width: 100%;

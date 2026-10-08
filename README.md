@@ -9,7 +9,7 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
-| `/admin` | Panel | Protegido por login (Supabase Auth): **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
 
 ## Datos (capa híbrida)
 
@@ -58,8 +58,13 @@ es editar ese único archivo: los componentes consumen exclusivamente `var(--tok
 - **Isotipo/logo**: `public/images/logo.png`, referenciado como `BRAND_LOGO` en `src/lib/config.ts`;
   se usa en favicon/apple-touch, el dock de navegación pública, el header de administración
   ("ALPIERCING Admin") y el footer junto a la firma FORGE Labs.
-- **Navbar pública**: cápsula glassmorphism flotante (dark glass, blur, borde sutil, sombra dock);
-  no se renderiza en `/admin`.
+- **Header público**: barra superior full-width sticky (dark glass, blur, borde inferior sutil) con la
+  marca a la izquierda y la navegación a la derecha, estado activo en dorado; no se renderiza en
+  `/admin`.
+- **Footer**: sección independiente full-width con grilla de 3 columnas (marca + descripción, redes,
+  créditos FORGE Labs).
+- **Controles de formulario**: skin compartido `.input`/`.field` en `tokens.css` (superficie refinada,
+  borde definido, foco dorado suave), compacto pero con alto mínimo de 44px.
 - **Botones**: sistema Dark Gold con tokens (`--radius-btn`, `--glow-btn-primary`,
   `--bg-btn-secondary`, `--border-btn-secondary{,-hover}`).
 

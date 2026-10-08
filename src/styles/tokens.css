@@ -60,11 +60,11 @@
   --bg-card-translucent: rgba(26, 26, 30, 0.6);
 
   /* Global footer surface */
-  --bg-footer: #0D0D0F;
+  --bg-footer: #0A0A0C;
 
-  /* Docked public navbar (glass capsule) — feature 008 */
-  --bg-navbar-glass: rgba(17, 17, 19, 0.85);
-  --blur-navbar: 16px;
+  /* Full-width public header (feature 010) — replaces the feature 008 capsule. */
+  --bg-navbar-glass: rgba(17, 17, 19, 0.9);
+  --blur-navbar: 12px;
   --border-glass: 1px solid rgba(255, 255, 255, 0.08);
   --border-glass-strong: 1px solid rgba(255, 255, 255, 0.12);
   --shadow-dock: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
@@ -76,13 +76,23 @@
   --border-btn-secondary: 1px solid rgba(255, 255, 255, 0.12);
   --border-btn-secondary-hover: 1px solid rgba(229, 169, 60, 0.4);
 
-  /* Form control system (shared) — feature 009.
+  /* Form control system (shared) — feature 009, refined by feature 010.
      Every input/select/textarea uses `.input` and every label group uses
      `.field`, so booking, admin and modal forms render identically instead of
-     falling back to the browser-native control skin. */
-  --control-min-height: 48px;
-  --control-padding: 0.75rem 0.9rem;
+     falling back to the browser-native control skin. Feature 010 compacts the
+     height (never below the 44px tactile minimum) and refines the surface. */
+  --control-min-height: 44px;
+  --control-padding: 0.625rem 1rem;
+  --control-font-size: 0.95rem;
   --control-gap: 0.4rem;
+  --bg-control: #18181B;
+  --border-control: 1px solid rgba(255, 255, 255, 0.15);
+
+  /* Page stacking layers (feature 010): the sticky header/sidebar sit below the
+     existing overlays so modals/drawers always paint on top. */
+  --z-header: 30;
+  --z-overlay: 40;
+  --z-modal: 41;
 
   /* Geometry & Elevation */
   --radius-card: 16px;
@@ -120,26 +130,36 @@ body {
 
 .input {
   font: inherit;
+  font-size: var(--control-font-size);
   color: var(--text-primary);
-  background: var(--bg-surface-elevated);
-  border: var(--border-card);
+  background: var(--bg-control);
+  border: var(--border-control);
   border-radius: var(--radius-image);
   padding: var(--control-padding);
   min-height: var(--control-min-height);
   /* Native date pickers and select menus follow the dark surface. */
   color-scheme: dark;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .input::placeholder {
   color: var(--text-muted);
 }
 
+/* Soft gold focus: quiet border + outer ring (feature 010). */
 .input:focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-glow);
 }
 
 .input:disabled {
   color: var(--text-muted);
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input {
+    transition: none;
+  }
 }

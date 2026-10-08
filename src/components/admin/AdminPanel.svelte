@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Lock, LogOut, Plus, X } from "lucide-svelte";
+  import { CalendarDays, Lock, LogOut, Menu, Package, Plus, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -30,6 +30,37 @@
   let tab = $state<AdminTab>("calendar");
   let mode = $state(dataStore.mode);
 
+  // Dashboard shell (feature 010): persistent sidebar on wide screens,
+  // off-canvas drawer on small screens.
+  let drawerOpen = $state(false);
+  let drawerEl = $state<HTMLElement | null>(null);
+  let toggleEl = $state<HTMLButtonElement | null>(null);
+
+  function openDrawer() {
+    drawerOpen = true;
+  }
+
+  function closeDrawer() {
+    drawerOpen = false;
+    toggleEl?.focus();
+  }
+
+  function toggleDrawer() {
+    if (drawerOpen) closeDrawer();
+    else openDrawer();
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (drawerOpen && event.key === "Escape") closeDrawer();
+  }
+
+  // Move focus into the drawer when it opens (admin-shell-contract §3).
+  $effect(() => {
+    if (drawerOpen && drawerEl) {
+      drawerEl.querySelector<HTMLElement>("button")?.focus();
+    }
+  });
+
   // Products state (catalog tab)
   let products = $state<ProductRecord[]>([]);
   let productsLoading = $state(false);
@@ -48,6 +79,7 @@
 
   function switchTab(next: AdminTab) {
     tab = next;
+    drawerOpen = false;
     const url = new URL(window.location.href);
     url.searchParams.set("tab", next);
     window.history.replaceState({}, "", url);
@@ -198,6 +230,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
 {#if status === "checking"}
   <section class="gate">
     <p class="hint" aria-live="polite">Verificando sesión…</p>
@@ -248,42 +282,68 @@
     </form>
   </section>
 {:else}
-  <section class="panel" aria-label="Panel de administración">
-    <header class="panel-head">
-      <div class="brand-row">
-        <img class="panel-logo" src={BRAND_LOGO} alt="ALPIERCING logo" width="32" height="32" />
-        <h1>ALPIERCING Admin</h1>
+  <div class="shell">
+    <button
+      type="button"
+      class="drawer-toggle"
+      aria-label="Abrir navegación del panel"
+      aria-expanded={drawerOpen}
+      aria-controls="admin-sidebar"
+      bind:this={toggleEl}
+      onclick={toggleDrawer}
+    >
+      <Menu size={20} aria-hidden="true" />
+    </button>
+
+    {#if drawerOpen}
+      <div class="drawer-backdrop" onclick={closeDrawer} role="presentation"></div>
+    {/if}
+
+    <aside
+      id="admin-sidebar"
+      class="sidebar"
+      class:open={drawerOpen}
+      aria-label="Navegación del panel"
+      bind:this={drawerEl}
+    >
+      <div class="sidebar-top">
+        <div class="brand-row">
+          <img class="panel-logo" src={BRAND_LOGO} alt="ALPIERCING logo" width="32" height="32" />
+          <h1>ALPIERCING Admin</h1>
+        </div>
+
+        <nav class="side-nav" aria-label="Secciones del panel">
+          <button
+            type="button"
+            class="side-link"
+            class:active={tab === "calendar"}
+            aria-current={tab === "calendar" ? "page" : undefined}
+            onclick={() => switchTab("calendar")}
+          >
+            <CalendarDays size={18} aria-hidden="true" /> Calendario
+          </button>
+          <button
+            type="button"
+            class="side-link"
+            class:active={tab === "catalog"}
+            aria-current={tab === "catalog" ? "page" : undefined}
+            onclick={() => switchTab("catalog")}
+          >
+            <Package size={18} aria-hidden="true" /> Inventario
+          </button>
+        </nav>
       </div>
-      <div class="head-actions">
+
+      <div class="sidebar-bottom">
         <span class="mode-badge">Modo {mode}</span>
         <span class="admin-email" title="Sesión activa">{adminEmail}</span>
-        <button type="button" class="ghost" onclick={logout}>
+        <button type="button" class="ghost logout" onclick={logout}>
           <LogOut size={16} aria-hidden="true" /> Cerrar Sesión
         </button>
       </div>
-    </header>
+    </aside>
 
-    <nav class="tabs" aria-label="Secciones del panel">
-      <button
-        type="button"
-        class="tab"
-        class:active={tab === "calendar"}
-        aria-pressed={tab === "calendar"}
-        onclick={() => switchTab("calendar")}
-      >
-        Calendario
-      </button>
-      <button
-        type="button"
-        class="tab"
-        class:active={tab === "catalog"}
-        aria-pressed={tab === "catalog"}
-        onclick={() => switchTab("catalog")}
-      >
-        Inventario
-      </button>
-    </nav>
-
+    <section class="content" aria-label="Contenido del panel">
     {#if tab === "calendar"}
       <AdminCalendar />
     {:else}
@@ -362,7 +422,8 @@
         </div>
       {/if}
     {/if}
-  </section>
+    </section>
+  </div>
 
   {#if showCreate}
     <div class="backdrop" onclick={closeCreate} role="presentation"></div>
@@ -408,15 +469,10 @@
 {/if}
 
 <style>
-  .gate,
-  .panel {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem 1.25rem;
-  }
-
   .gate {
     max-width: 420px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem;
     text-align: center;
   }
 
@@ -478,22 +534,118 @@
     margin: 0.25rem 0 0;
   }
 
-  .panel-head {
+  /* Dashboard shell (feature 010): sidebar + main content area. */
+  .shell {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.25rem;
+    align-items: flex-start;
+    min-height: 100vh;
+    width: 100%;
   }
 
-  .panel-head {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-header);
     display: flex;
-    align-items: center;
+    flex-direction: column;
     justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.25rem;
+    gap: 2rem;
+    width: 256px;
+    flex: 0 0 256px;
+    height: 100vh;
+    padding: 1.5rem;
+    background: var(--bg-app-body);
+    border-right: 1px solid var(--divider-subtle);
+  }
+
+  .sidebar-top {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .sidebar-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    border-top: 1px solid var(--divider-subtle);
+    padding-top: 1rem;
+  }
+
+  .side-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .side-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-btn);
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+    transition: color 160ms ease, background-color 160ms ease;
+  }
+
+  .side-link:hover {
+    color: var(--text-gold);
+    background: var(--bg-pill-hover);
+  }
+
+  .side-link:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .side-link.active {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 2.5rem 3rem;
+  }
+
+  /* Drawer toggle: hidden until the sidebar becomes off-canvas. */
+  .drawer-toggle {
+    display: none;
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: var(--z-overlay);
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    border: var(--border-card);
+    background: var(--bg-badge-pill);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .drawer-toggle:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-overlay);
+    background: var(--overlay-backdrop);
   }
 
   .brand-row {
@@ -514,11 +666,8 @@
     color: var(--text-primary);
   }
 
-  .head-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+  .logout {
+    width: 100%;
   }
 
   .mode-badge {
@@ -538,28 +687,44 @@
     font-size: 0.85rem;
   }
 
-  .tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
+  /* Small screens: the sidebar becomes an off-canvas drawer. */
+  @media (max-width: 767px) {
+    .shell {
+      display: block;
+      min-height: auto;
+    }
+
+    .drawer-toggle {
+      display: inline-flex;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: var(--z-modal);
+      transform: translateX(-100%);
+      /* Hidden from view AND from the tab order while off-canvas. */
+      visibility: hidden;
+      transition: transform 200ms ease, visibility 200ms ease;
+      box-shadow: var(--shadow-card);
+    }
+
+    .sidebar.open {
+      transform: translateX(0);
+      visibility: visible;
+    }
+
+    .content {
+      padding: 4.5rem 1.25rem 2rem;
+    }
   }
 
-  .tab {
-    min-height: 44px;
-    padding: 0.5rem 1.1rem;
-    border-radius: var(--radius-pill);
-    border: var(--border-card);
-    background: var(--bg-badge-pill);
-    color: var(--text-secondary);
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .tab.active {
-    background: var(--accent-primary);
-    color: var(--accent-on);
-    box-shadow: var(--shadow-glow);
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .side-link {
+      transition: none;
+    }
   }
 
   .toolbar {

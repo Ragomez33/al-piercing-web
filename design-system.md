@@ -90,6 +90,13 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - `shadow-card`: `0 8px 24px rgba(0, 0, 0, 0.45)`.
 - `shadow-glow`: `0 8px 24px var(--accent-primary-glow)`.
 
+### Layout, form-control & layer tokens (feature 010)
+- Header glass: `bg-navbar-glass` (`rgba(17,17,19,0.9)`) + `blur-navbar` (`12px`).
+- Footer surface: `bg-footer` (`#0A0A0C`).
+- Form controls: `bg-control` (`#18181B`), `border-control` (`1px solid rgba(255,255,255,0.15)`),
+  `control-padding` (`0.625rem 1rem`), `control-min-height` (`44px`), `control-font-size` (`0.95rem`).
+- Stacking layers: `z-header` (`30`) < `z-overlay` (`40`) < `z-modal` (`41`).
+
 ### Decorative background
 - `--ink-blob-core` / `--ink-blob-accent` / `--ink-blob-transparent` drive the canvas ink-motion
   sprite in `InkBackgroundCanvas.svelte` (gold/wood glows on near-black), which reads them at
@@ -101,21 +108,26 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 
 ### App shell (`BaseLayout.astro`)
 - Global styles imported from `tokens.css`; `lang="es"`.
-- Fixed, non-interactive decorative layers: the ink canvas (`z-index: 0`) and the top gradient
-  (`z-index: 1`, height `34vh`). Content sits at `z-index: 2`.
-- A `site-footer` renders the brand and current year.
+- Fixed, non-interactive decorative layers: the ink canvas and the top gradient (both layer `0`,
+  height `34vh`). `<main>` has **no numeric `z-index`** so overlays inside it are not trapped in a
+  stacking context (feature 010).
+- Layer tokens: `--z-header: 30` (sticky header/sidebar) < `--z-overlay: 40` (backdrop/drawer) <
+  `--z-modal: 41` (modals/drawers). This guarantees existing modals always paint **above** the sticky
+  chrome.
+- The public footer renders on **public routes only**; `/admin` uses its own dashboard shell.
 
 ### Header (`AppHeader.astro`) — implemented
-- **Docked glass capsule (feature 008)**: the public header renders as a centered rounded pill
-  (`max-width: 650px`, `margin-top: 1rem`, `border-radius: var(--radius-pill)`) with a dark glass
-  surface (`--bg-navbar-glass`, `backdrop-filter: blur(var(--blur-navbar))`, `--border-glass`,
-  `--shadow-dock`).
+- **Full-width sticky top bar (feature 010)**: `position: sticky; top: 0` at `--z-header`, spanning the
+  full viewport width with a translucent dark surface (`--bg-navbar-glass`),
+  `backdrop-filter: blur(var(--blur-navbar))` and a thin `--divider-subtle` bottom border.
+- **Layout**: centered container (`max-width: 1080px`) with the brand on the left and the navigation on
+  the right, wrapping gracefully at 320px with no horizontal scroll.
 - **Brand**: `STUDIO_PROFILE.brand` (`ALPIERCING`) in `--text-gold`, beside the logo
-  (`BRAND_LOGO` → `/images/logo.png`, `mix-blend-mode: screen`) at the left of the capsule.
+  (`BRAND_LOGO` → `/images/logo.png`, `mix-blend-mode: screen`) at the left.
 - **Navigation**: pill links for `NAV_ITEMS` — Inicio (`/`), Catálogo (`/catalog`),
-  Reservar (`/booking`); targets ≥ 44px.
-- **Rendering scope**: the public header renders ONLY on public routes; `/admin` hides it and uses
-  the admin panel header (logo + "ALPIERCING Admin" + `[Cerrar Sesión]`).
+  Reservar (`/booking`); targets ≥ 44px; the active destination is computed from the route and shown
+  with `aria-current="page"` plus a gold fill (`--accent-primary`/`--accent-on`).
+- **Rendering scope**: renders ONLY on public routes; `/admin` uses the dashboard shell.
 
 ### Button system (feature 008)
 - `btn-primary`: `--accent-primary` fill, `--accent-on` text (weight 600), `--radius-btn` (12px),
@@ -130,17 +142,43 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - **Date Filters (From/To, admin)**: reserved for the future admin bookings view; same surface
   tokens as the date input.
 
-### Form controls (shared) — implemented
+### Form controls (shared) — implemented (refined by feature 010)
 - Every `input`, `select` and `textarea` in the app carries the global `.input` class (defined in
-  `tokens.css`) and therefore shares one skin: `--bg-surface-elevated` surface, `--border-card`,
-  `--radius-image`, `padding: var(--control-padding)` (0.75rem 0.9rem),
-  `min-height: var(--control-min-height)` (48px), `color-scheme: dark` (native date pickers and
-  select menus follow the dark surface) and an `--accent-primary` focus ring.
+  `tokens.css`) and therefore shares one skin: `--bg-control` surface (refined charcoal),
+  `--border-control` (defined `rgba(255,255,255,0.15)` border), `--radius-image`,
+  `padding: var(--control-padding)` (`0.625rem 1rem`),
+  `min-height: var(--control-min-height)` (`44px` — compact but never below the tactile minimum),
+  `font-size: var(--control-font-size)` (`0.95rem`) and `color-scheme: dark` (native date pickers and
+  select menus follow the dark surface).
+- **Focus**: a soft gold state — `border-color: var(--accent-primary)` plus an outer
+  `box-shadow: 0 0 0 3px var(--accent-primary-glow)` ring — replaces the hard outline.
 - Label groups use the global `.field` class (flex column, `--text-secondary`, weight 600); the
   control may be nested inside the label (booking) or referenced via `for` as a sibling (admin) —
   the visual result is identical.
 - This removes the per-component `.field input` / `.field select` duplication that previously
   failed to match sibling controls in the admin panel and made them fall back to the native skin.
+
+### Footer (`Footer.astro`) — implemented (redesigned by feature 010)
+- An **independent, full-width** section (`--bg-footer`, near-black) with a `--divider-subtle` top
+  border and generous padding.
+- A centered CSS grid with **three groups**: brand/logo + short description · quick links / social
+  channels (Instagram + WhatsApp with inline icons, ≥44px targets) · FORGE Labs signature + credits,
+  plus a brand/year line under a divider.
+- **Responsive**: one column on narrow viewports → three columns (`1.5fr 1fr 1fr`) from `768px`, with no
+  horizontal page scroll.
+
+### Admin shell (`AdminPanel.svelte`) — implemented (redesigned by feature 010)
+- The authenticated dashboard is a two-region workspace: a **left sidebar** and a **main content area**
+  (`flex: 1`, ample padding).
+- **Sidebar** (`position: sticky; top: 0; height: 100vh`, fixed width `256px`, right `--divider-subtle`
+  border) with "ALPIERCING Admin" at the top, a vertical **Calendario / Inventario** nav (lucide icons,
+  refined hover, **gold active** state), and — at the bottom — the mode badge, the signed-in email and
+  `Cerrar Sesión`.
+- **Small screens (<768px)**: the sidebar becomes an off-canvas drawer toggled by an accessible button
+  (`aria-expanded`/`aria-controls`), with a backdrop, focus management and `Escape` to close; the main
+  content is not pushed off-screen.
+- Data actions, the `?tab=` sync and the auth gate are unchanged; the public footer is not rendered on
+  `/admin`.
 
 ---
 
