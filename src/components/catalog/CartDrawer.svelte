@@ -16,6 +16,7 @@
   import { PAYMENT_METHODS, type PaymentMethod } from "../../lib/types/content";
   import { WHATSAPP_PHONE } from "../../lib/config";
   import { dataStore } from "../../lib/data/store";
+  import { emitProductsChanged } from "../../lib/services/catalog";
 
   // The ONLY interactive island on the catalog page (client:load).
   let open = $state(false);
@@ -23,6 +24,17 @@
   let drawerEl = $state<HTMLElement | null>(null);
   let fabEl = $state<HTMLButtonElement | null>(null);
   let backdropEl = $state<HTMLElement | null>(null);
+  let notice = $state("");
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showNotice(message: string) {
+    notice = message;
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      notice = "";
+      noticeTimer = null;
+    }, 4000);
+  }
 
   function filterBy(category: string) {
     document.querySelectorAll<HTMLButtonElement>("button[data-category]").forEach((btn) => {
@@ -44,11 +56,25 @@
       const id = addBtn.getAttribute("data-add-to-cart");
       if (!id) return;
       try {
+        // Re-validate against the live data before adding (the card may be stale
+        // if an operator hid/consumed the product meanwhile).
         const products = await dataStore.listProducts({ includeUnpublished: false });
         const product = products.find((record) => record.id === id);
-        if (product && product.stock > 0) addToCart(product);
+        if (!product) {
+          showNotice("Este producto ya no está disponible.");
+          emitProductsChanged();
+          return;
+        }
+        if (product.stock <= 0) {
+          showNotice("Este producto está agotado.");
+          emitProductsChanged();
+          return;
+        }
+        addToCart(product);
       } catch (err) {
-        // Keep the grid usable; a failing lookup must never throw to the user.
+        // A failing lookup must never throw to the user; warn and refresh.
+        showNotice("No se pudo verificar el producto. Intentá de nuevo.");
+        emitProductsChanged();
         void err;
       }
       return;
@@ -97,6 +123,7 @@
     return () => {
       document.removeEventListener("click", onDocClick);
       document.removeEventListener("keydown", onKeydown);
+      if (noticeTimer) clearTimeout(noticeTimer);
     };
   });
 </script>
@@ -113,6 +140,10 @@
     <span class="badge" aria-live="polite">{$itemCount}</span>
   {/if}
 </button>
+
+{#if notice}
+  <p class="toast" role="status" aria-live="polite">{notice}</p>
+{/if}
 
 {#if open}
   <div class="backdrop" bind:this={backdropEl} onclick={onBackdrop} role="presentation"></div>
@@ -240,6 +271,23 @@
     transform: translateY(-2px);
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
+  }
+
+  .toast {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 6.25rem;
+    z-index: 43;
+    max-width: min(320px, calc(100vw - 2.5rem));
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background: var(--bg-card-light);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glow);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
   }
 
   .badge {

@@ -4,6 +4,7 @@
   import { PRODUCTS } from "../../lib/types/content";
   import { DataError, dataStore } from "../../lib/data/store";
   import { isSupabaseConfigured } from "../../lib/data/supabase-client";
+  import { subscribeToProductChanges } from "../../lib/services/catalog";
   import type { ProductRecord } from "../../lib/types/domain";
 
   // Production (Supabase configured) starts empty and shows a skeleton until the
@@ -18,15 +19,22 @@
   let loading = $state(isProduction);
   let loadError = $state("");
 
-  onMount(async () => {
+  async function refresh() {
     try {
       products = await dataStore.listProducts({ includeUnpublished: false });
+      loadError = "";
     } catch (err) {
       // In demo keep the static seed visible; in production surface the error.
       loadError = err instanceof DataError ? err.message : "No se pudo cargar el catálogo";
     } finally {
       loading = false;
     }
+  }
+
+  onMount(() => {
+    void refresh();
+    // Auto-refresh when products change (admin hides/stocks) — see catalog service.
+    return subscribeToProductChanges(() => void refresh());
   });
 </script>
 

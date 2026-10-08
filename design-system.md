@@ -245,6 +245,11 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - Add-to-cart: `rounded-full` `--accent-primary` "＋" carrying `data-add-to-cart`.
 - **Low/empty stock:** amber-gold `--accent-gold` "Pocas unidades" pill when `0 < stock ≤ 5`; the
   add action is replaced by an "Agotado" chip at `stock = 0`.
+- **Availability sync:** the catalog auto-refreshes when products change (admin hide/publish/stock)
+  via cross-tab `storage` events (demo), Supabase Realtime on `public.products` (production, via the
+  `subscribeToProductChanges` service) and tab focus/visibility. Adding to cart re-validates the
+  product first; if it was hidden or is out of stock, a Dark Luxury toast is shown and the grid
+  refreshes automatically.
 
 ### Gallery Tiles (Landing) — implemented
 - 2-column (mobile) → 4-column (desktop) grid of `--radius-card` image tiles over
