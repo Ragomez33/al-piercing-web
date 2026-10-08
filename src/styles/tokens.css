@@ -67,6 +67,14 @@
   --border-btn-secondary: 1px solid rgba(255, 255, 255, 0.12);
   --border-btn-secondary-hover: 1px solid rgba(229, 169, 60, 0.4);
 
+  /* Form control system (shared) — feature 009.
+     Every input/select/textarea uses `.input` and every label group uses
+     `.field`, so booking, admin and modal forms render identically instead of
+     falling back to the browser-native control skin. */
+  --control-min-height: 48px;
+  --control-padding: 0.75rem 0.9rem;
+  --control-gap: 0.4rem;
+
   /* Geometry & Elevation */
   --radius-card: 16px;
   --radius-pill: 9999px;
@@ -84,4 +92,45 @@ body {
   color: var(--text-primary);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
+}
+
+/* --- Shared form controls (feature 009) --------------------------------
+   `.field` groups a label (with its optional control); `.input` is the
+   single skin for every input/select/textarea in the app. Because these are
+   global (tokens.css is the only allowed global stylesheet), controls stay
+   identical across booking, admin and modal forms regardless of whether the
+   control is nested in or a sibling of its label. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--control-gap);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.input {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
+  border: var(--border-card);
+  border-radius: var(--radius-image);
+  padding: var(--control-padding);
+  min-height: var(--control-min-height);
+  /* Native date pickers and select menus follow the dark surface. */
+  color-scheme: dark;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.input:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
 }

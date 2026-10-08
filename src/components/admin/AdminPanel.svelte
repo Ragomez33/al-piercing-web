@@ -220,6 +220,7 @@
     <form onsubmit={submitLogin}>
       <label class="field" for="login-email">Email</label>
       <input
+        class="input"
         id="login-email"
         type="email"
         autocomplete="username"
@@ -229,6 +230,7 @@
 
       <label class="field" for="login-password">Contraseña</label>
       <input
+        class="input"
         id="login-password"
         type="password"
         autocomplete="current-password"
@@ -318,6 +320,7 @@
               <div class="stock-edit">
                 <label class="sr-label" for={`stock-${product.id}`}>Stock</label>
                 <input
+                  class="input"
                   id={`stock-${product.id}`}
                   type="number"
                   min="0"
@@ -373,23 +376,23 @@
 
       <form onsubmit={(e) => { e.preventDefault(); void submitCreate(); }}>
         <label class="field" for="np-name">Nombre</label>
-        <input id="np-name" type="text" bind:value={newName} required />
+        <input class="input" id="np-name" type="text" bind:value={newName} required />
 
         <label class="field" for="np-category">Categoría</label>
-        <select id="np-category" bind:value={newCategory}>
+        <select class="input" id="np-category" bind:value={newCategory}>
           {#each PRODUCT_CATEGORIES as category (category)}
             <option value={category}>{category}</option>
           {/each}
         </select>
 
         <label class="field" for="np-price">Precio (centavos)</label>
-        <input id="np-price" type="number" min="0" step="1" inputmode="numeric" bind:value={newPrice} required />
+        <input class="input" id="np-price" type="number" min="0" step="1" inputmode="numeric" bind:value={newPrice} required />
 
         <label class="field" for="np-stock">Stock</label>
-        <input id="np-stock" type="number" min="0" step="1" inputmode="numeric" bind:value={newStock} required />
+        <input class="input" id="np-stock" type="number" min="0" step="1" inputmode="numeric" bind:value={newStock} required />
 
         <label class="field" for="np-image">Imagen (ruta/URL)</label>
-        <input id="np-image" type="text" bind:value={newImage} placeholder="/images/products/placeholder.svg" />
+        <input class="input" id="np-image" type="text" bind:value={newImage} placeholder="/images/products/placeholder.svg" />
 
         {#if createError}
           <p class="error" role="alert">{createError}</p>
@@ -463,29 +466,6 @@
     color: var(--text-gold);
   }
 
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .field input,
-  .field select {
-    font: inherit;
-    color: var(--text-primary);
-    background: var(--bg-surface-elevated);
-    border: var(--border-card);
-    border-radius: var(--radius-image);
-    /* Matches the booking form inputs (feature 008 a11y/symmetry). */
-    padding: 0.75rem 0.9rem;
-    min-height: 48px;
-  }
-
-  .field input:focus-visible,
-  .field select:focus-visible,
   .icon-btn:focus-visible,
   .ghost:focus-visible {
     outline: 2px solid var(--accent-primary);

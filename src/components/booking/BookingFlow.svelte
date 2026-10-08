@@ -168,7 +168,7 @@
 
     <label class="field">
       <span>Fecha</span>
-      <input type="date" min={today} bind:value={date} onchange={onDateChange} />
+      <input class="input" type="date" min={today} bind:value={date} onchange={onDateChange} />
     </label>
 
     <fieldset class="slots" disabled={!date}>
@@ -202,12 +202,13 @@
     <form onsubmit={submit}>
       <label class="field">
         <span>Nombre completo</span>
-        <input type="text" bind:value={clientName} autocomplete="name" required />
+        <input class="input" type="text" bind:value={clientName} autocomplete="name" required />
       </label>
 
       <label class="field">
         <span>Tu WhatsApp</span>
         <input
+          class="input"
           type="tel"
           bind:value={clientWhatsapp}
           autocomplete="tel"
@@ -219,7 +220,7 @@
 
       <label class="field">
         <span>Notas (opcional)</span>
-        <textarea bind:value={notes} rows="3" placeholder="Referencias, dudas, alergias..."></textarea>
+        <textarea class="input" bind:value={notes} rows="3" placeholder="Referencias, dudas, alergias..."></textarea>
       </label>
 
       <div class="deposit">
@@ -389,31 +390,9 @@
     margin-bottom: 0.15rem;
   }
 
+  /* Vertical rhythm only; the field/control skin is global (tokens.css). */
   .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
     margin-bottom: 1rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .field input,
-  .field textarea {
-    font: inherit;
-    color: var(--text-primary);
-    background: var(--bg-surface-elevated);
-    border: var(--border-card);
-    border-radius: var(--radius-image);
-    padding: 0.75rem 0.9rem;
-    min-height: 48px;
-  }
-
-  .field input:focus-visible,
-  .field textarea:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 1px;
   }
 
   .slots {

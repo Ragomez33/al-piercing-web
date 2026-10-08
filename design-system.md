@@ -125,6 +125,18 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - **Date Filters (From/To, admin)**: reserved for the future admin bookings view; same surface
   tokens as the date input.
 
+### Form controls (shared) — implemented
+- Every `input`, `select` and `textarea` in the app carries the global `.input` class (defined in
+  `tokens.css`) and therefore shares one skin: `--bg-surface-elevated` surface, `--border-card`,
+  `--radius-image`, `padding: var(--control-padding)` (0.75rem 0.9rem),
+  `min-height: var(--control-min-height)` (48px), `color-scheme: dark` (native date pickers and
+  select menus follow the dark surface) and an `--accent-primary` focus ring.
+- Label groups use the global `.field` class (flex column, `--text-secondary`, weight 600); the
+  control may be nested inside the label (booking) or referenced via `for` as a sibling (admin) —
+  the visual result is identical.
+- This removes the per-component `.field input` / `.field select` duplication that previously
+  failed to match sibling controls in the admin panel and made them fall back to the native skin.
+
 ---
 
 ## 4. Visual Grammar & Card Standards

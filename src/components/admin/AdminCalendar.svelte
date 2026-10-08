@@ -343,7 +343,7 @@
     {:else}
       <div class="reschedule">
         <label class="field" for="re-date">Nueva fecha</label>
-        <input id="re-date" type="date" bind:value={reDate} onchange={rebuildReSlots} />
+        <input class="input" id="re-date" type="date" bind:value={reDate} onchange={rebuildReSlots} />
         <label class="field">Nuevo horario (disponibles)</label>
         {#if reSlots.length === 0}
           <p class="hint">No hay horarios libres para esta fecha.</p>
@@ -378,7 +378,7 @@
     <form onsubmit={(e) => { e.preventDefault(); submitBlock(); }}>
       <p class="hint-block">{nbDate} · {nbTime}</p>
       <label class="field" for="nb-label">Etiqueta</label>
-      <input id="nb-label" type="text" list="block-labels" bind:value={nbLabel} />
+      <input class="input" id="nb-label" type="text" list="block-labels" bind:value={nbLabel} />
       <datalist id="block-labels">
         <option value="Almuerzo" />
         <option value="Personal" />
@@ -386,7 +386,7 @@
       </datalist>
 
       <label class="field" for="nb-duration">Duración (min)</label>
-      <select id="nb-duration" bind:value={nbDuration}>
+      <select class="input" id="nb-duration" bind:value={nbDuration}>
         <option value={15}>15</option>
         <option value={30}>30</option>
         <option value={60}>60</option>
@@ -732,26 +732,6 @@
     flex-direction: column;
     gap: 0.6rem;
     margin-bottom: 0.75rem;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .field input,
-  .field select {
-    font: inherit;
-    color: var(--text-primary);
-    background: var(--bg-surface-elevated);
-    border: var(--border-card);
-    border-radius: var(--radius-image);
-    padding: 0.6rem 0.8rem;
-    min-height: 48px;
   }
 
   .slot-grid {
