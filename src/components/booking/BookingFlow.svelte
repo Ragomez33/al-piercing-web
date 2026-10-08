@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Clock } from "lucide-svelte";
-  import { PIERCING_SERVICES, type PiercingService } from "../../lib/data/services";
+  import { type PiercingService } from "../../lib/data/services";
   import { submitBookingRequest } from "../../lib/services/booking";
   import { calcDepositCents, formatCents } from "../../lib/utils/money";
   import { PAYMENT_BINANCE_PAY, PAYMENT_PAGO_MOVIL, WHATSAPP_PHONE } from "../../lib/config";
-  import { DataError, dataStore } from "../../lib/data/store";
+  import { DataError, dataStore, listFallbackServices } from "../../lib/data/store";
   import { agendaTimes, localISODate } from "../../lib/utils/dates";
 
   let selected = $state<PiercingService | null>(null);
@@ -20,6 +20,11 @@
   let slotsLoading = $state(false);
   let submitError = $state("");
   let submitting = $state(false);
+
+  // Service menu loaded from the managed data source (feature 011, FR-002).
+  let services = $state<PiercingService[]>([]);
+  let servicesLoading = $state(true);
+  let servicesNotice = $state("");
 
   // Success panel (feature 009)
   let successOpen = $state(false);
@@ -155,10 +160,29 @@
     }
   }
 
-  onMount(() => {
+  async function loadServices() {
+    servicesLoading = true;
+    servicesNotice = "";
+    try {
+      services = await dataStore.listServices();
+    } catch {
+      // Non-blocking fallback to the demo seed served by the data layer (FR-012).
+      try {
+        services = await listFallbackServices();
+      } catch {
+        services = [];
+      }
+      servicesNotice = "No se pudo cargar la lista en línea; mostrando el menú local.";
+    } finally {
+      servicesLoading = false;
+    }
+  }
+
+  onMount(async () => {
+    await loadServices();
     const id = new URLSearchParams(window.location.search).get("service");
     if (!id) return;
-    const match = PIERCING_SERVICES.find((service) => service.id === id);
+    const match = services.find((service) => service.id === id);
     if (match) {
       selected = match;
       revealForm();
@@ -170,8 +194,17 @@
 
 <section class="services" aria-labelledby="services-title">
   <h2 id="services-title">1. Elegí tu servicio</h2>
+  {#if servicesNotice}
+    <p class="hint" role="status">{servicesNotice}</p>
+  {/if}
+
+  {#if servicesLoading}
+    <p class="hint" aria-live="polite">Cargando servicios…</p>
+  {:else if services.length === 0}
+    <p class="empty-state" role="status">No hay servicios disponibles por el momento.</p>
+  {:else}
   <ul class="service-list">
-    {#each PIERCING_SERVICES as service (service.id)}
+    {#each services as service (service.id)}
       <li>
         <button
           type="button"
@@ -199,6 +232,7 @@
       </li>
     {/each}
   </ul>
+  {/if}
 </section>
 
 {#if selected}
@@ -351,6 +385,16 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    padding: 2.5rem 1rem;
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    background: var(--bg-card-light);
   }
 
   .service {

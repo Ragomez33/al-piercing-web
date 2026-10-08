@@ -26,7 +26,7 @@ export interface Database {
           created_at: string;
           client_name: string;
           client_whatsapp: string;
-          service_id: string;
+          service_id: string | null;
           service_name: string;
           price_cents: number;
           deposit_cents: number;
@@ -54,7 +54,7 @@ export interface Database {
           created_at?: string;
           client_name?: string;
           client_whatsapp?: string;
-          service_id?: string;
+          service_id?: string | null;
           service_name?: string;
           price_cents?: number;
           deposit_cents?: number;
@@ -63,7 +63,15 @@ export interface Database {
           status?: string;
           notes?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "bookings_service_id_fkey";
+            columns: ["service_id"];
+            isOneToOne: false;
+            referencedRelation: "services";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       products: {
         Row: {
@@ -119,6 +127,42 @@ export interface Database {
           time_slot?: string;
           duration_minutes?: number;
           label?: string;
+        };
+        Relationships: [];
+      };
+      services: {
+        Row: {
+          id: string;
+          name: string;
+          category: string;
+          description: string;
+          price_cents: number;
+          duration_minutes: number;
+          requires_deposit: boolean;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          category: string;
+          description?: string;
+          price_cents: number;
+          duration_minutes: number;
+          requires_deposit?: boolean;
+          active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          category?: string;
+          description?: string;
+          price_cents?: number;
+          duration_minutes?: number;
+          requires_deposit?: boolean;
+          active?: boolean;
+          created_at?: string;
         };
         Relationships: [];
       };

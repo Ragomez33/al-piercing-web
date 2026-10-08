@@ -2,11 +2,19 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { GALLERY_ITEMS, PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
 import { PIERCING_SERVICE_CATEGORIES } from "../lib/data/services";
-import { dataStore } from "../lib/data/store";
+import { dataStore, listFallbackServices } from "../lib/data/store";
 import { formatCents } from "../lib/utils/money";
 
-// Services come from the data layer (FR-003); static in both modes.
-const services = await dataStore.listServices();
+// Services come from the managed data layer (FR-002/FR-003); the demo seed is a
+// non-blocking fallback if the live read fails (FR-012), so the static build never
+// breaks when the backend is not ready.
+let services = await dataStore.listServices().catch(async () => {
+  try {
+    return await listFallbackServices();
+  } catch {
+    return [];
+  }
+});
 
 // Group services by category for a Setmore-style menu.
 const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({

@@ -3,7 +3,7 @@
  * data layer (demo localStorage adapter vs production Supabase adapter).
  * Integer cents end-to-end (constitution Principle IV); no `any`.
  */
-import type { PiercingService } from "../data/services";
+import type { NewServiceInput, PiercingService } from "../data/services";
 import type { ProductCategory } from "./content";
 
 export type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
@@ -14,7 +14,11 @@ export interface Booking {
   createdAt: string; // ISO
   clientName: string;
   clientWhatsapp: string;
-  serviceId: string;
+  /**
+   * UUID of the referenced service, or `null` once that service was deleted
+   * (FK `ON DELETE SET NULL`). `serviceName`/`priceCents` keep the snapshot.
+   */
+  serviceId: string | null;
   serviceName: string;
   priceCents: number; // integer cents, ≥ 0
   depositCents: number; // Math.round(priceCents / 2)
@@ -86,7 +90,13 @@ export class DataError extends Error {
 /** The ONLY data-access surface components are allowed to use. */
 export interface DataStore {
   readonly mode: DataMode;
-  listServices(): Promise<PiercingService[]>;
+  listServices(input?: { includeInactive?: boolean }): Promise<PiercingService[]>;
+  createService(input: NewServiceInput): Promise<PiercingService>;
+  updateService(
+    id: string,
+    patch: Partial<NewServiceInput> & { active?: boolean },
+  ): Promise<PiercingService>;
+  deleteService(id: string): Promise<void>;
   listProducts(input: { includeUnpublished: boolean }): Promise<ProductRecord[]>;
   createProduct(input: NewProductInput): Promise<ProductRecord>;
   updateProduct(

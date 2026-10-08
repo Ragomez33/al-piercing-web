@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { ChevronLeft, ChevronRight, X } from "lucide-svelte";
-  import { PIERCING_SERVICES } from "../../lib/data/services";
   import { DataError, dataStore } from "../../lib/data/store";
   import { approveBooking, cancelBooking } from "../../lib/services/booking";
   import { buildBookingConfirmationLink } from "../../lib/utils/booking";
@@ -24,6 +23,7 @@
   let weekStart = $state(startOfWeek(new Date()));
   let bookings = $state<Booking[]>([]);
   let blocks = $state<TimeBlock[]>([]);
+  let durations = $state<Record<string, number>>({});
   let loading = $state(false);
   let calError = $state("");
 
@@ -55,20 +55,25 @@
   const days = $derived(weekDays(weekStart));
   const rows = calendarRows();
 
-  function durationFor(serviceId: string): number {
-    return PIERCING_SERVICES.find((service) => service.id === serviceId)?.durationMinutes ?? 30;
+  function durationFor(serviceId: string | null): number {
+    if (!serviceId) return 30;
+    return durations[serviceId] ?? 30;
   }
 
   async function reload() {
     loading = true;
     calError = "";
     try {
-      const [allBookings, allBlocks] = await Promise.all([
+      const [allBookings, allBlocks, allServices] = await Promise.all([
         dataStore.listBookings(),
         dataStore.listBlocks(),
+        dataStore.listServices({ includeInactive: true }),
       ]);
       bookings = allBookings;
       blocks = allBlocks;
+      durations = Object.fromEntries(
+        allServices.map((service) => [service.id, service.durationMinutes]),
+      );
     } catch (err) {
       calError = err instanceof DataError ? err.message : "No se pudo cargar la agenda";
     } finally {

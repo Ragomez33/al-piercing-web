@@ -19,12 +19,13 @@ import {
 } from "../../types/domain";
 import type { Database } from "../../../types/supabase";
 import { calcDepositCents } from "../../utils/money";
-import { PIERCING_SERVICES, type PiercingService } from "../services";
+import type { NewServiceInput, PiercingService } from "../services";
 import { getSupabaseClient } from "../supabase-client";
 
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type TimeBlockRow = Database["public"]["Tables"]["time_blocks"]["Row"];
+type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 
 function toTimeBlock(row: TimeBlockRow): TimeBlock {
   const duration = row.duration_minutes;
@@ -75,6 +76,23 @@ function toProduct(row: ProductRow): ProductRecord {
   };
 }
 
+function toService(row: ServiceRow): PiercingService {
+  const category = row.category;
+  if (category !== "NOSTRIL" && category !== "HELIX" && category !== "NAVEL" && category !== "TITANIO") {
+    throw new DataError(`Categoría de servicio inválida: ${category}`);
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    category,
+    priceCents: row.price_cents,
+    durationMinutes: row.duration_minutes,
+    description: row.description,
+    requiresDeposit: row.requires_deposit,
+    active: row.active,
+  };
+}
+
 function requireRow<T>(data: T | null, label: string): T {
   if (!data) throw new DataError(`${label} no se devolvió`);
   return data;
@@ -98,8 +116,58 @@ export function createSupabaseAdapter(): DataStore {
   return {
     mode,
 
-    async listServices(): Promise<PiercingService[]> {
-      return PIERCING_SERVICES;
+    async listServices(input): Promise<PiercingService[]> {
+      const client = getSupabaseClient();
+      let query = client.from("services").select("*").order("name", { ascending: true });
+      if (!input?.includeInactive) query = query.eq("active", true);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toService(row));
+    },
+
+    async createService(input: NewServiceInput): Promise<PiercingService> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("services")
+        .insert({
+          name: input.name.trim(),
+          category: input.category,
+          description: input.description,
+          price_cents: input.priceCents,
+          duration_minutes: input.durationMinutes,
+          requires_deposit: input.requiresDeposit,
+          active: true,
+        })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toService(requireRow(data, "El servicio"));
+    },
+
+    async updateService(id, patch): Promise<PiercingService> {
+      const client = getSupabaseClient();
+      const update: Database["public"]["Tables"]["services"]["Update"] = {};
+      if (patch.name !== undefined) update.name = patch.name.trim();
+      if (patch.category !== undefined) update.category = patch.category;
+      if (patch.description !== undefined) update.description = patch.description;
+      if (patch.priceCents !== undefined) update.price_cents = patch.priceCents;
+      if (patch.durationMinutes !== undefined) update.duration_minutes = patch.durationMinutes;
+      if (patch.requiresDeposit !== undefined) update.requires_deposit = patch.requiresDeposit;
+      if (patch.active !== undefined) update.active = patch.active;
+      const { data, error } = await client
+        .from("services")
+        .update(update)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toService(requireRow(data, "El servicio"));
+    },
+
+    async deleteService(id: string): Promise<void> {
+      const client = getSupabaseClient();
+      const { error } = await client.from("services").delete().eq("id", id);
+      if (error) throw new DataError(error.message);
     },
 
     async listProducts({ includeUnpublished }): Promise<ProductRecord[]> {

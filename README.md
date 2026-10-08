@@ -9,16 +9,19 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
-| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario), **Inventario** (stock inline, publicar/ocultar, alta de productos) y **Servicios** (CRUD completo del menú: crear, editar, activar/desactivar y eliminar) |
 
 ## Datos (capa híbrida)
 
 Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
-  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1`) sembrado con el contenido estático.
+  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1` / `alpi:services:v1`) sembrado con el contenido estático.
 - **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
-  `supabase/migrations/`, incluyendo `0006_release_cancelled_slots.sql`, que libera el horario al cancelar).
+  `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios).
+- Los servicios son datos gestionados: el frontend (`BookingFlow`, landing, `AdminCalendar`) los lee con
+  `dataStore.listServices()` (nunca importa la lista hardcodeada); si la consulta falla, cae al seed demo
+  servido por la capa de datos.
 - Las transiciones de estado de las reservas pasan por el servicio de dominio
   `src/lib/services/booking.ts` (`submitBookingRequest` / `approveBooking` / `cancelBooking`); los
   componentes no llaman a Supabase directamente.
@@ -41,7 +44,7 @@ src/
 │   ├── config.ts                     # WhatsApp y datos de pago (env-overridable)
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/adapters/{local,supabase}.ts
-│   ├── data/services.ts              # PIERCING_SERVICES (menú fijo)
+│   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
 │   ├── services/booking.ts           # Servicio de dominio (persistir/aprobar/cancelar + links WhatsApp)
 │   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/DataStore
 │   └── utils/{money,booking,dates}.ts
@@ -104,6 +107,7 @@ autodetectan Astro).
    (persistencia en `localStorage` del navegador).
 3. Para **Modo Producción** con Supabase:
    - Crear el proyecto en Supabase.
-   - Aplicar `supabase/migrations/0001_init.sql` (SQL Editor o `supabase db push`).
+   - Aplicar las migraciones (`supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
+     `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado.
    - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
 4. Build: `npm run build` (directorio de publicación: `dist`).

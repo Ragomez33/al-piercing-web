@@ -17,7 +17,7 @@ the studio (admin). These are the only modules of the product (governance §1.1)
 | `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos y bloque de proceso | `/` | Implemented |
 | `catalog` | Catálogo de argollas y labrets de titanio, joyería zirconia/navel y kits de aftercare con carrito flotante y checkout pre-llenado a WhatsApp | `/catalog` | Implemented |
 | `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de seña con salida a WhatsApp | `/booking` | Implemented |
-| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grid semanal de citas por duración, modal con Confirmar Seña/Reagendar/Cancelar, bloqueos de horario) e **Inventario** (stock inline, publicar/ocultar, alta de productos) sobre la capa híbrida de datos | `/admin` | Implemented |
+| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grid semanal de citas por duración, modal con Confirmar Seña/Reagendar/Cancelar, bloqueos de horario), **Inventario** (stock inline, publicar/ocultar, alta de productos) y **Servicios** (CRUD completo del menú: crear, editar, activar/desactivar y eliminar, con confirmación) sobre la capa híbrida de datos | `/admin` | Implemented |
 
 > **History:** v1.x of this document described **Foundly POS** (a local-first point-of-sale app).
 > v2.0.0 re-labeled it as *Tattoo Art* but kept a React Native/Gluestack description that never
@@ -171,9 +171,13 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - The authenticated dashboard is a two-region workspace: a **left sidebar** and a **main content area**
   (`flex: 1`, ample padding).
 - **Sidebar** (`position: sticky; top: 0; height: 100vh`, fixed width `256px`, right `--divider-subtle`
-  border) with "ALPIERCING Admin" at the top, a vertical **Calendario / Inventario** nav (lucide icons,
+  border) with "ALPIERCING Admin" at the top, a vertical **Calendario / Inventario / Servicios** nav (lucide icons,
   refined hover, **gold active** state), and — at the bottom — the mode badge, the signed-in email and
   `Cerrar Sesión`.
+- **Servicios** (feature 011): full CRUD of the managed piercing menu — list with category, price,
+  duration and an active toggle, a create/edit modal and a destructive **Eliminar** action behind a
+  confirmation dialog. Money is shown in cents via `formatCents`; deactivated services stay listed but
+  disappear from the public menu.
 - **Small screens (<768px)**: the sidebar becomes an off-canvas drawer toggled by an accessible button
   (`aria-expanded`/`aria-controls`), with a backdrop, focus management and `Escape` to close; the main
   content is not pushed off-screen.

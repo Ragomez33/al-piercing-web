@@ -4,6 +4,7 @@
  * environment variables; every module reads/writes through this facade.
  */
 import type { DataMode, DataStore } from "../types/domain";
+import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
 
@@ -24,3 +25,12 @@ export function createDataStore(): DataStore {
 
 /** Shared singleton consumed by all pages/islands. */
 export const dataStore: DataStore = createDataStore();
+
+/**
+ * Demo-seed services served by the local adapter. Used as a non-blocking fallback
+ * when a live `listServices()` read fails (feature 011 FR-012); components never
+ * import the hardcoded service list directly.
+ */
+export async function listFallbackServices(): Promise<PiercingService[]> {
+  return createLocalAdapter().listServices();
+}

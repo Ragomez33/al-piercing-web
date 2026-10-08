@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { CalendarDays, Lock, LogOut, Menu, Package, Plus, X } from "lucide-svelte";
+  import { CalendarDays, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -12,11 +12,17 @@
   import { BRAND_LOGO } from "../../lib/config";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
   import type { ProductRecord } from "../../lib/types/domain";
+  import {
+    PIERCING_SERVICE_CATEGORIES,
+    type NewServiceInput,
+    type PiercingService,
+    type PiercingServiceCategory,
+  } from "../../lib/data/services";
   import { formatCents } from "../../lib/utils/money";
   import { uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
 
-  type AdminTab = "calendar" | "catalog";
+  type AdminTab = "calendar" | "catalog" | "services";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -81,6 +87,29 @@
   let imagePreview = $state<string | null>(null);
   let uploadingImage = $state(false);
 
+  // Services state (feature 011)
+  let services = $state<PiercingService[]>([]);
+  let servicesLoading = $state(false);
+  let servicesError = $state("");
+  let svBusy = $state<Record<string, boolean>>({});
+
+  // Service create/edit modal
+  let showService = $state(false);
+  let editingServiceId = $state<string | null>(null);
+  let svName = $state("");
+  let svCategory = $state<PiercingServiceCategory>("NOSTRIL");
+  let svDescription = $state("");
+  let svPrice = $state("");
+  let svDuration = $state("");
+  let svRequiresDeposit = $state(true);
+  let serviceError = $state("");
+  let savingService = $state(false);
+
+  // Service delete confirmation
+  let deletingService = $state<PiercingService | null>(null);
+  let deleting = $state(false);
+  let deleteError = $state("");
+
   function switchTab(next: AdminTab) {
     tab = next;
     drawerOpen = false;
@@ -88,6 +117,127 @@
     url.searchParams.set("tab", next);
     window.history.replaceState({}, "", url);
     if (next === "catalog") void refreshCatalog();
+    if (next === "services") void refreshServices();
+  }
+
+  async function refreshServices() {
+    try {
+      servicesLoading = true;
+      servicesError = "";
+      services = await dataStore.listServices({ includeInactive: true });
+    } catch (err) {
+      servicesError = err instanceof DataError ? err.message : "Error al cargar los servicios";
+    } finally {
+      servicesLoading = false;
+    }
+  }
+
+  function openCreateService() {
+    serviceError = "";
+    editingServiceId = null;
+    svName = "";
+    svCategory = "NOSTRIL";
+    svDescription = "";
+    svPrice = "";
+    svDuration = "";
+    svRequiresDeposit = true;
+    showService = true;
+  }
+
+  function openEditService(service: PiercingService) {
+    serviceError = "";
+    editingServiceId = service.id;
+    svName = service.name;
+    svCategory = service.category;
+    svDescription = service.description;
+    svPrice = String(service.priceCents);
+    svDuration = String(service.durationMinutes);
+    svRequiresDeposit = service.requiresDeposit;
+    showService = true;
+  }
+
+  function closeService() {
+    showService = false;
+    serviceError = "";
+  }
+
+  async function submitService() {
+    const name = svName.trim();
+    const priceCents = Number(svPrice);
+    const durationMinutes = Number(svDuration);
+    if (name.length === 0) {
+      serviceError = "El nombre es obligatorio";
+      return;
+    }
+    if (!Number.isInteger(priceCents) || priceCents < 0) {
+      serviceError = "El precio debe ser un número entero mayor o igual a 0 (centavos)";
+      return;
+    }
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      serviceError = "La duración debe ser un número entero mayor a 0 (minutos)";
+      return;
+    }
+    const input: NewServiceInput = {
+      name,
+      category: svCategory,
+      description: svDescription.trim(),
+      priceCents,
+      durationMinutes,
+      requiresDeposit: svRequiresDeposit,
+    };
+    savingService = true;
+    serviceError = "";
+    try {
+      if (editingServiceId) {
+        await dataStore.updateService(editingServiceId, input);
+      } else {
+        await dataStore.createService(input);
+      }
+      closeService();
+      await refreshServices();
+    } catch (err) {
+      serviceError = err instanceof DataError ? err.message : "No se pudo guardar el servicio";
+    } finally {
+      savingService = false;
+    }
+  }
+
+  async function toggleServiceActive(service: PiercingService) {
+    svBusy[service.id] = true;
+    servicesError = "";
+    try {
+      await dataStore.updateService(service.id, { active: !service.active });
+      await refreshServices();
+    } catch (err) {
+      servicesError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
+    } finally {
+      svBusy[service.id] = false;
+    }
+  }
+
+  function askDeleteService(service: PiercingService) {
+    deleteError = "";
+    deletingService = service;
+  }
+
+  function cancelDeleteService() {
+    deletingService = null;
+    deleteError = "";
+  }
+
+  async function confirmDeleteService() {
+    if (!deletingService) return;
+    deleting = true;
+    deleteError = "";
+    try {
+      await dataStore.deleteService(deletingService.id);
+      deletingService = null;
+      await refreshServices();
+    } catch (err) {
+      deleteError = err instanceof DataError ? err.message : "No se pudo eliminar el servicio";
+    } finally {
+      deleting = false;
+    }
   }
 
   async function refreshCatalog() {
@@ -153,6 +303,8 @@
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "catalog") tab = "catalog";
+    else if (params.get("tab") === "services") tab = "services";
+    if (status === "dashboard" && tab === "services") void refreshServices();
     unsubscribeAuth = onAuthStateChange((sessionEmail) => {
       if (sessionEmail) {
         adminEmail = sessionEmail;
@@ -161,6 +313,7 @@
         status = "login";
         adminEmail = "";
         products = [];
+        services = [];
       }
     });
   });
@@ -364,6 +517,15 @@
           >
             <Package size={18} aria-hidden="true" /> Inventario
           </button>
+          <button
+            type="button"
+            class="side-link"
+            class:active={tab === "services"}
+            aria-current={tab === "services" ? "page" : undefined}
+            onclick={() => switchTab("services")}
+          >
+            <Sparkles size={18} aria-hidden="true" /> Servicios
+          </button>
         </nav>
       </div>
 
@@ -379,7 +541,7 @@
     <section class="content" aria-label="Contenido del panel">
     {#if tab === "calendar"}
       <AdminCalendar />
-    {:else}
+    {:else if tab === "catalog"}
       <div class="toolbar">
         <button type="button" class="primary" onclick={() => { createError = ""; showCreate = true; }}>
           <Plus size={18} aria-hidden="true" /> Nuevo Producto
@@ -454,6 +616,62 @@
           {/if}
         </div>
       {/if}
+    {:else}
+      <div class="toolbar">
+        <button type="button" class="primary" onclick={openCreateService}>
+          <Plus size={18} aria-hidden="true" /> Nuevo Servicio
+        </button>
+      </div>
+
+      {#if servicesLoading}
+        <p class="hint" aria-live="polite">Cargando servicios…</p>
+      {:else if servicesError}
+        <p class="error" role="alert">{servicesError}</p>
+      {:else}
+        <div class="inventory">
+          {#if services.length === 0}
+            <p class="empty-state">No hay servicios cargados.</p>
+          {:else}
+            <ul class="rows">
+              {#each services as service (service.id)}
+                <li class="row">
+                  <div class="row-main">
+                    <strong class="row-title">{service.name}</strong>
+                    <span class="row-sub">{service.category} · {service.durationMinutes} min</span>
+                    <span class="row-sub">{formatCents(service.priceCents)}</span>
+                  </div>
+                  <div class="publish">
+                    <span class="sr-label">Activo</span>
+                    <button
+                      type="button"
+                      class="toggle"
+                      class:on={service.active}
+                      role="switch"
+                      aria-checked={service.active}
+                      aria-label={`Activar o desactivar ${service.name}`}
+                      disabled={svBusy[service.id]}
+                      onclick={() => void toggleServiceActive(service)}
+                    >
+                      <span class="knob" aria-hidden="true"></span>
+                    </button>
+                    {#if !service.active}
+                      <span class="chip-hidden">Inactivo</span>
+                    {/if}
+                  </div>
+                  <div class="row-actions">
+                    <button type="button" class="ghost small" onclick={() => openEditService(service)}>
+                      <Pencil size={16} aria-hidden="true" /> Editar
+                    </button>
+                    <button type="button" class="danger small" onclick={() => askDeleteService(service)}>
+                      <Trash2 size={16} aria-hidden="true" /> Eliminar
+                    </button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
     {/if}
     </section>
   </div>
@@ -512,6 +730,83 @@
           </button>
         </div>
       </form>
+    </section>
+  {/if}
+
+  {#if showService}
+    <div class="backdrop" onclick={closeService} role="presentation"></div>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="service-title">
+      <header class="modal-head">
+        <h2 id="service-title">{editingServiceId ? "Editar Servicio" : "Nuevo Servicio"}</h2>
+        <button type="button" class="icon-btn" onclick={closeService} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+
+      <form onsubmit={(e) => { e.preventDefault(); void submitService(); }}>
+        <label class="field" for="sv-name">Nombre</label>
+        <input class="input" id="sv-name" type="text" bind:value={svName} required />
+
+        <label class="field" for="sv-category">Categoría</label>
+        <select class="input" id="sv-category" bind:value={svCategory}>
+          {#each PIERCING_SERVICE_CATEGORIES as category (category.id)}
+            <option value={category.id}>{category.label}</option>
+          {/each}
+        </select>
+
+        <label class="field" for="sv-description">Descripción</label>
+        <textarea class="input" id="sv-description" rows="3" bind:value={svDescription}></textarea>
+
+        <label class="field" for="sv-price">Precio (centavos)</label>
+        <input class="input" id="sv-price" type="number" min="0" step="1" inputmode="numeric" bind:value={svPrice} required />
+        <p class="field-hint">100 centavos = $1.00</p>
+
+        <label class="field" for="sv-duration">Duración (min)</label>
+        <input class="input" id="sv-duration" type="number" min="1" step="1" inputmode="numeric" bind:value={svDuration} required />
+
+        <label class="checkbox-field">
+          <input type="checkbox" bind:checked={svRequiresDeposit} />
+          <span>Requiere seña</span>
+        </label>
+
+        {#if serviceError}
+          <p class="error" role="alert">{serviceError}</p>
+        {/if}
+
+        <div class="modal-actions">
+          <button type="button" class="ghost" onclick={closeService} disabled={savingService}>
+            Cancelar
+          </button>
+          <button type="submit" class="primary" disabled={savingService}>
+            {savingService ? "Guardando…" : editingServiceId ? "Guardar Cambios" : "Crear Servicio"}
+          </button>
+        </div>
+      </form>
+    </section>
+  {/if}
+
+  {#if deletingService}
+    <div class="backdrop" onclick={cancelDeleteService} role="presentation"></div>
+    <section class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-service-title">
+      <header class="modal-head">
+        <h2 id="delete-service-title">Eliminar servicio</h2>
+        <button type="button" class="icon-btn" onclick={cancelDeleteService} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+      <p class="gate-hint">
+        ¿Eliminar <strong>{deletingService.name}</strong>? Las reservas existentes conservan el nombre y
+        el precio guardados.
+      </p>
+      {#if deleteError}
+        <p class="error" role="alert">{deleteError}</p>
+      {/if}
+      <div class="modal-actions">
+        <button type="button" class="ghost" onclick={cancelDeleteService} disabled={deleting}>Cancelar</button>
+        <button type="button" class="danger" onclick={() => void confirmDeleteService()} disabled={deleting}>
+          {deleting ? "Eliminando…" : "Eliminar"}
+        </button>
+      </div>
     </section>
   {/if}
 {/if}
@@ -961,6 +1256,39 @@
     font-weight: 700;
     padding: 0.2rem 0.6rem;
     border-radius: var(--radius-pill);
+  }
+
+  .row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .danger {
+    background: var(--accent-negative);
+    color: var(--accent-on);
+  }
+
+  .field-hint {
+    margin: -0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    min-height: 44px;
+  }
+
+  .checkbox-field input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent-primary);
   }
 
   .sr-label {

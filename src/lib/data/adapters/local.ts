@@ -16,11 +16,12 @@ import {
 } from "../../types/domain";
 import { PRODUCTS } from "../../types/content";
 import { calcDepositCents } from "../../utils/money";
-import { PIERCING_SERVICES, type PiercingService } from "../services";
+import { PIERCING_SERVICES, type NewServiceInput, type PiercingService } from "../services";
 
 const BOOKINGS_KEY = "alpi:bookings:v1";
 const PRODUCTS_KEY = "alpi:products:v1";
 const BLOCKS_KEY = "alpi:timeblocks:v1";
+const SERVICES_KEY = "alpi:services:v1";
 
 function storage(): Storage {
   try {
@@ -42,6 +43,12 @@ function seedProducts(): ProductRecord[] {
   return PRODUCTS.map((product) => ({ ...product, published: true }));
 }
 
+function seedServices(): PiercingService[] {
+  return PIERCING_SERVICES.map((service) => ({ ...service }));
+}
+
+const SERVICE_CATEGORIES = ["NOSTRIL", "HELIX", "NAVEL", "TITANIO"] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -54,7 +61,7 @@ function isBooking(value: unknown): value is Booking {
     typeof value.createdAt === "string" &&
     typeof value.clientName === "string" &&
     typeof value.clientWhatsapp === "string" &&
-    typeof value.serviceId === "string" &&
+    (value.serviceId === null || typeof value.serviceId === "string") &&
     typeof value.serviceName === "string" &&
     typeof value.priceCents === "number" &&
     typeof value.depositCents === "number" &&
@@ -78,6 +85,42 @@ function isProductRecord(value: unknown): value is ProductRecord {
     typeof value.image === "string" &&
     typeof value.published === "boolean"
   );
+}
+
+function isService(value: unknown): value is PiercingService {
+  if (!isRecord(value)) return false;
+  const category = value.category;
+  const categoryOk =
+    category === "NOSTRIL" ||
+    category === "HELIX" ||
+    category === "NAVEL" ||
+    category === "TITANIO";
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    categoryOk &&
+    typeof value.priceCents === "number" &&
+    typeof value.durationMinutes === "number" &&
+    typeof value.description === "string" &&
+    typeof value.requiresDeposit === "boolean" &&
+    typeof value.active === "boolean"
+  );
+}
+
+/** Shared validation for create/update (demo parity with the DB checks). */
+function validateService(input: NewServiceInput): void {
+  if (input.name.trim().length === 0) {
+    throw new DataError("El nombre es obligatorio");
+  }
+  if (!(SERVICE_CATEGORIES as readonly string[]).includes(input.category)) {
+    throw new DataError("Categoría de servicio inválida");
+  }
+  if (!Number.isInteger(input.priceCents) || input.priceCents < 0) {
+    throw new DataError("El precio debe ser un entero mayor o igual a 0 (centavos)");
+  }
+  if (!Number.isInteger(input.durationMinutes) || input.durationMinutes <= 0) {
+    throw new DataError("La duración debe ser un entero mayor a 0 (minutos)");
+  }
 }
 
 function isTimeBlock(value: unknown): value is TimeBlock {
@@ -129,8 +172,36 @@ export function createLocalAdapter(): DataStore {
   return {
     mode: "demo",
 
-    async listServices(): Promise<PiercingService[]> {
-      return PIERCING_SERVICES;
+    async listServices(input): Promise<PiercingService[]> {
+      const services = await readArray(SERVICES_KEY, seedServices(), isService);
+      return input?.includeInactive ? services : services.filter((service) => service.active);
+    },
+
+    async createService(input: NewServiceInput): Promise<PiercingService> {
+      validateService(input);
+      const services = await readArray(SERVICES_KEY, seedServices(), isService);
+      const record: PiercingService = { ...input, name: input.name.trim(), id: newId(), active: true };
+      await writeArray(SERVICES_KEY, [...services, record]);
+      return record;
+    },
+
+    async updateService(id, patch): Promise<PiercingService> {
+      const services = await readArray(SERVICES_KEY, seedServices(), isService);
+      const current = services.find((service) => service.id === id);
+      if (!current) throw new DataError("Servicio no encontrado");
+      const merged: PiercingService = { ...current, ...patch };
+      validateService(merged);
+      const next = services.map((service) => (service.id === id ? merged : service));
+      await writeArray(SERVICES_KEY, next);
+      return merged;
+    },
+
+    async deleteService(id: string): Promise<void> {
+      const services = await readArray(SERVICES_KEY, seedServices(), isService);
+      if (!services.some((service) => service.id === id)) {
+        throw new DataError("Servicio no encontrado");
+      }
+      await writeArray(SERVICES_KEY, services.filter((service) => service.id !== id));
     },
 
     async listProducts({ includeUnpublished }): Promise<ProductRecord[]> {

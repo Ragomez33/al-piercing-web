@@ -39,8 +39,8 @@ each story.
 
 **Purpose**: Verify the baseline and confirm the target files
 
-- [ ] T001 Verify baseline: run `npx astro check` (MUST be 0 errors), `npm run build` and `npm run lint` at repository root; all MUST pass before changes
-- [ ] T002 [P] Confirm target files and the next migration number: `src/lib/data/services.ts`, `src/lib/types/domain.ts`, `src/lib/data/adapters/{local,supabase}.ts`, `src/types/supabase.ts`, `src/components/booking/BookingFlow.svelte`, `src/components/admin/AdminPanel.svelte`, `src/components/admin/AdminCalendar.svelte`; latest migration is `0004_grants.sql` → next is **`0005_services.sql`**
+- [X] T001 Verify baseline: run `npx astro check` (MUST be 0 errors), `npm run build` and `npm run lint` at repository root; all MUST pass before changes
+- [X] T002 [P] Confirm target files and the next migration number: `src/lib/data/services.ts`, `src/lib/types/domain.ts`, `src/lib/data/adapters/{local,supabase}.ts`, `src/types/supabase.ts`, `src/components/booking/BookingFlow.svelte`, `src/components/admin/AdminPanel.svelte`, `src/components/admin/AdminCalendar.svelte`; latest migration is `0004_grants.sql` → next is **`0005_services.sql`**
 
 ---
 
@@ -51,12 +51,12 @@ story
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Extend the service domain type/seed in `src/lib/data/services.ts`: add `active: boolean` to
+- [X] T003 Extend the service domain type/seed in `src/lib/data/services.ts`: add `active: boolean` to
   `PiercingService` and add `NewServiceInput { name; category; priceCents; durationMinutes; description; requiresDeposit }` (no `id`); set `active: true` on every entry of the seed and give the six seed entries **fixed UUID** ids (keep the fixed category union `"NOSTRIL" | "HELIX" | "NAVEL" | "TITANIO"`); then extend the `DataStore` interface in `src/lib/types/domain.ts` with `listServices(input?: { includeInactive?: boolean }): Promise<PiercingService[]>`, `createService(input: NewServiceInput): Promise<PiercingService>`, `updateService(id: string, patch: Partial<NewServiceInput> & { active?: boolean }): Promise<PiercingService>`, `deleteService(id: string): Promise<void>`; also change `Booking.serviceId` to **`string | null`** (FK `ON DELETE SET NULL`) (data-model.md, services-data-contract §1, FR-017)
-- [ ] T004 Add the `services` table to the generated types in `src/types/supabase.ts` (`Row`/`Insert`/`Update`/`Relationships`): `id string (uuid)`, `name text`, `category text`, `description text`, `price_cents integer`, `duration_minutes integer`, `requires_deposit boolean`, `active boolean`, `created_at timestamptz`; also reflect `bookings.service_id` as nullable uuid + the `bookings → services` relationship (Schema Control; services-data-contract §3)
-- [ ] T005 [P] Add `supabase/migrations/0005_services.sql`: create `public.services` (`id uuid primary key default gen_random_uuid()`; name not null; category check in `('NOSTRIL','HELIX','NAVEL','TITANIO')`; description not null default ''; `price_cents integer not null check (price_cents >= 0)`; `duration_minutes integer not null check (duration_minutes > 0)`; `requires_deposit boolean not null default true`; `active boolean not null default true`; `created_at timestamptz not null default now()`); enable RLS; policies: `select` public `using (active = true)`, `select` authenticated `using (true)`, `insert`/`update`/`delete` authenticated; then alter `public.bookings.service_id` to `uuid` + drop not null + add `bookings_service_id_fkey foreign key (service_id) references public.services(id) on delete set null`; idempotent seed of the six current services with fixed UUIDs (`on conflict (id) do nothing`) (services-data-contract §3, FR-018)
-- [ ] T006 [P] Edit `src/lib/data/adapters/local.ts`: implement `listServices({ includeInactive })` (key `alpi:services:v1`, seeded with the seed `PIERCING_SERVICES`, filter to `active` unless `includeInactive`), `createService` (generate a UUID `id`, force `active: true`, validate name/category/price/duration, throw typed `DataError`), `updateService` (apply patch incl. `active`, validate, `DataError` if not found), `deleteService` (remove by id, `DataError` if not found); update the `isBooking` guard to accept `serviceId: string | null` (services-data-contract §2, research R2/R4, FR-017)
-- [ ] T007 [P] Edit `src/lib/data/adapters/supabase.ts`: implement `listServices({ includeInactive })` against `public.services` (`.eq("active", true)` unless `includeInactive`), `createService` (insert without `id` — the DB generates the uuid — `.select().single()`), `updateService` (update + `.select().single()`), `deleteService` (`.delete().eq("id", id)`); narrow rows to `PiercingService` and map errors to typed `DataError`; map `bookings.service_id` to `string | null` in `toBooking` (depends on T004; services-data-contract §1/§2/§5, FR-017)
+- [X] T004 Add the `services` table to the generated types in `src/types/supabase.ts` (`Row`/`Insert`/`Update`/`Relationships`): `id string (uuid)`, `name text`, `category text`, `description text`, `price_cents integer`, `duration_minutes integer`, `requires_deposit boolean`, `active boolean`, `created_at timestamptz`; also reflect `bookings.service_id` as nullable uuid + the `bookings → services` relationship (Schema Control; services-data-contract §3)
+- [X] T005 [P] Add `supabase/migrations/0005_services.sql`: create `public.services` (`id uuid primary key default gen_random_uuid()`; name not null; category check in `('NOSTRIL','HELIX','NAVEL','TITANIO')`; description not null default ''; `price_cents integer not null check (price_cents >= 0)`; `duration_minutes integer not null check (duration_minutes > 0)`; `requires_deposit boolean not null default true`; `active boolean not null default true`; `created_at timestamptz not null default now()`); enable RLS; policies: `select` public `using (active = true)`, `select` authenticated `using (true)`, `insert`/`update`/`delete` authenticated; then alter `public.bookings.service_id` to `uuid` + drop not null + add `bookings_service_id_fkey foreign key (service_id) references public.services(id) on delete set null`; idempotent seed of the six current services with fixed UUIDs (`on conflict (id) do nothing`) (services-data-contract §3, FR-018)
+- [X] T006 [P] Edit `src/lib/data/adapters/local.ts`: implement `listServices({ includeInactive })` (key `alpi:services:v1`, seeded with the seed `PIERCING_SERVICES`, filter to `active` unless `includeInactive`), `createService` (generate a UUID `id`, force `active: true`, validate name/category/price/duration, throw typed `DataError`), `updateService` (apply patch incl. `active`, validate, `DataError` if not found), `deleteService` (remove by id, `DataError` if not found); update the `isBooking` guard to accept `serviceId: string | null` (services-data-contract §2, research R2/R4, FR-017)
+- [X] T007 [P] Edit `src/lib/data/adapters/supabase.ts`: implement `listServices({ includeInactive })` against `public.services` (`.eq("active", true)` unless `includeInactive`), `createService` (insert without `id` — the DB generates the uuid — `.select().single()`), `updateService` (update + `.select().single()`), `deleteService` (`.delete().eq("id", id)`); narrow rows to `PiercingService` and map errors to typed `DataError`; map `bookings.service_id` to `string | null` in `toBooking` (depends on T004; services-data-contract §1/§2/§5, FR-017)
 
 **Checkpoint**: Types, schema, generated types and both adapters ready — user stories can begin
 
@@ -72,20 +72,20 @@ delete another, reload → the changes persisted and are reflected in admin (qui
 
 > All tasks in this phase edit `src/components/admin/AdminPanel.svelte` — run sequentially, no `[P]`.
 
-- [ ] T008 [US1] Add the **Servicios** section to the `src/components/admin/AdminPanel.svelte` sidebar:
+- [X] T008 [US1] Add the **Servicios** section to the `src/components/admin/AdminPanel.svelte` sidebar:
   a third section button (lucide icon, active/hover treatment like the others), an `AdminSection` value
   `"services"` wired through `switchTab` and the `?tab=` query, and a list view that loads
   `dataStore.listServices({ includeInactive: true })` showing name, category, `formatCents(priceCents)`,
   `{durationMinutes} min` and the active state (with loading hint, empty state and `role="alert"` error)
   (admin-services-ui-contract §1/§2, FR-004)
-- [ ] T009 [US1] Add the create/edit **service modal** in `src/components/admin/AdminPanel.svelte`:
+- [X] T009 [US1] Add the create/edit **service modal** in `src/components/admin/AdminPanel.svelte`:
   labeled controls (Nombre text required; Categoría select from `PIERCING_SERVICE_CATEGORIES`;
   Descripción textarea; Precio (centavos) number; Duración (min) number; Requiere seña checkbox default
   true), local validation (name non-empty, price integer ≥ 0, duration integer > 0) then
   `dataStore.createService(input)` / `dataStore.updateService(id, patch)`; on success close and reload, on
   failure show the `DataError` in `role="alert"` and keep the modal open; `role="dialog"` `aria-modal`
   with accessible name, Escape/backdrop close, focus management (admin-services-ui-contract §3/§4/§6/§7)
-- [ ] T010 [US1] Add per-row **activate/deactivate and delete** in `src/components/admin/AdminPanel.svelte`:
+- [X] T010 [US1] Add per-row **activate/deactivate and delete** in `src/components/admin/AdminPanel.svelte`:
   an active toggle (like the product `published` switch) calling
   `dataStore.updateService(id, { active: !active })`, and an **Eliminar** action behind a confirmation
   step calling `dataStore.deleteService(id)`; disable while in flight and reload the list on success
@@ -104,12 +104,12 @@ price/duration; the admin calendar resolves durations from managed data too.
 selecting one shows the right price/deposit/duration; calendar blocks render with the right duration
 (quickstart S1/S2).
 
-- [ ] T011 [US2] Rework `src/components/booking/BookingFlow.svelte` to load services from
+- [X] T011 [US2] Rework `src/components/booking/BookingFlow.svelte` to load services from
   `dataStore.listServices()` (active only) in `onMount` instead of the `PIERCING_SERVICES` constant
   (remove the import): keep the same card markup/selection, add a polite loading hint (`aria-live`),
   resolve the `?service=<uuid>` deep link **after** the list loads, and derive summary/deposit/slot from
   the selected service (booking-menu-contract §1/§2, FR-002/FR-010)
-- [ ] T012 [P] [US2] Update `src/components/admin/AdminCalendar.svelte` to stop using the
+- [X] T012 [P] [US2] Update `src/components/admin/AdminCalendar.svelte` to stop using the
   `PIERCING_SERVICES` constant for durations: load `dataStore.listServices({ includeInactive: true })`
   once and build an `id → durationMinutes` map (fallback `30`) used by `durationFor` (research R6, FR-010)
 
@@ -124,7 +124,7 @@ selecting one shows the right price/deposit/duration; calendar blocks render wit
 **Independent Test**: Run without backend config (or force a read error) → `/booking` shows the seed menu
 and a non-blocking notice; demo admin edits persist across reloads (quickstart S9/S10).
 
-- [ ] T013 [US3] In `src/components/booking/BookingFlow.svelte`, wrap the services load in a try/catch:
+- [X] T013 [US3] In `src/components/booking/BookingFlow.svelte`, wrap the services load in a try/catch:
   on error fall back to the demo seed **through the data layer** (the local adapter's `listServices()`,
   filtered to `active === true`) and show a non-blocking notice (e.g. "No se pudo cargar la lista en
   línea; mostrando el menú local.") instead of a blank list — do not import `PIERCING_SERVICES` in the
@@ -141,7 +141,7 @@ and a non-blocking notice; demo admin edits persist across reloads (quickstart S
 **Independent Test**: Deactivate a service → absent from `/booking` (with an elegant empty state when all
 are inactive) but present/inactive in admin; reactivating restores it (quickstart S6/S11).
 
-- [ ] T014 [US4] In `src/components/booking/BookingFlow.svelte`, ensure the public list excludes inactive
+- [X] T014 [US4] In `src/components/booking/BookingFlow.svelte`, ensure the public list excludes inactive
   services and add the elegant empty state "No hay servicios disponibles por el momento." when none are
   active (booking-menu-contract §1, FR-003)
 
@@ -153,18 +153,18 @@ are inactive) but present/inactive in admin; reactivating restores it (quickstar
 
 **Purpose**: Documentation, audits and final validation
 
-- [ ] T015 [P] Update `design-system.md` (document the **Servicios** admin section and the hybrid service
+- [X] T015 [P] Update `design-system.md` (document the **Servicios** admin section and the hybrid service
   source) and `README.md` (structure/notes: services CRUD incl. delete, migration `0005`, demo fallback)
-- [ ] T016 [P] a11y/responsive audit of the new admin UI and booking menu: labeled controls, `role="alert"`
+- [X] T016 [P] a11y/responsive audit of the new admin UI and booking menu: labeled controls, `role="alert"`
   errors, `role="dialog"` modal with focus management, delete confirmation, ≥44px targets,
   `prefers-reduced-motion`, no horizontal scroll 320–1920px (FR-015, SC-007)
-- [ ] T017 [P] Token audit: grep `src/` for raw `#hex`/`rgba(` and confirm only `src/styles/tokens.css`
+- [X] T017 [P] Token audit: grep `src/` for raw `#hex`/`rgba(` and confirm only `src/styles/tokens.css`
   contains literals (constitution §II)
 - [ ] T018 Run the `quickstart.md` scenarios S1–S12 (public load/select, admin CRUD incl. delete,
   deactivate, validation, demo persistence, fallback on failure, empty state, regressions)
-- [ ] T019 Run `npx astro check` (MUST be **0 errors**), `npm run build` and `npm run lint` at repository
+- [X] T019 Run `npx astro check` (MUST be **0 errors**), `npm run build` and `npm run lint` at repository
   root — all MUST pass (FR-016, SC-006, explicit user requirement)
-- [ ] T020 Commit the feature
+- [X] T020 Commit the feature
 
 ---
 
