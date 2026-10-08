@@ -15,15 +15,19 @@
       data-fallback="/images/products/placeholder.svg"
     />
   </div>
-  <span class="chip">{product.category}</span>
 
-  {#if product.stock > 0 && product.stock <= 5}
-    <span class="low-stock">Pocas unidades</span>
-  {/if}
+  <div class="meta">
+    <span class="chip">{product.category}</span>
+    {#if product.stock > 0 && product.stock <= 5}
+      <span class="low-stock">Pocas unidades</span>
+    {/if}
+  </div>
 
   <div class="body">
-    <h3>{product.name}</h3>
-    <p class="price">{formatCents(product.priceCents)}</p>
+    <div class="info">
+      <h3>{product.name}</h3>
+      <p class="price">{formatCents(product.priceCents)}</p>
+    </div>
 
     {#if product.stock === 0}
       <span class="sold-out">Agotado</span>
@@ -50,7 +54,7 @@
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
     padding: 0.75rem;
-    gap: 0.75rem;
+    gap: 0.6rem;
   }
 
   .thumb {
@@ -68,34 +72,45 @@
     display: block;
   }
 
+  /* Category + stock alert sit BELOW the image, not floating over it. */
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
   .chip {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
     background: var(--bg-badge-pill);
     color: var(--text-primary);
     font-weight: 700;
-    font-size: 0.78rem;
-    padding: 0.25rem 0.75rem;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.65rem;
     border-radius: var(--radius-pill);
   }
 
   .low-stock {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
     background: var(--accent-gold);
     color: var(--accent-on);
     font-weight: 700;
-    font-size: 0.78rem;
-    padding: 0.25rem 0.75rem;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.65rem;
     border-radius: var(--radius-pill);
   }
 
+  /* Name/price on the left, action button aligned to the right. */
   .body {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .info {
+    display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.2rem;
+    min-width: 0;
   }
 
   h3 {
@@ -113,7 +128,7 @@
   }
 
   .add {
-    align-self: flex-start;
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -138,12 +153,18 @@
   }
 
   .sold-out {
-    align-self: flex-start;
+    flex: 0 0 auto;
     background: var(--bg-badge-pill);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    padding: 0.6rem 1rem;
+    padding: 0.55rem 0.9rem;
     border-radius: var(--radius-pill);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .add {
+      transition: none;
+    }
   }
 </style>

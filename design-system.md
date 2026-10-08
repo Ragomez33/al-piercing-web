@@ -237,8 +237,11 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 ### Product Cards (Catalog) — implemented
 - Square image tile (`--radius-image`, `--bg-surface-elevated`) with `data-fallback` (dark/gold
   product mock art).
-- Padded body: product name (`--text-primary`), category chip (`--bg-badge-pill`, categories
-  `Argollas & Labrets`, `Zirconia & Navel`, `Aftercare`) and price (`tabular-nums`, Bold).
+- Below the image: a meta row with the category chip (`--bg-badge-pill`, categories
+  `Argollas & Labrets`, `Zirconia & Navel`, `Aftercare`) and, when low, the "Pocas unidades" pill —
+  both in normal flow (not floating over the image).
+- Body row: product name (`--text-primary`) + price (`tabular-nums`, Bold) on the left, and the
+  action aligned to the right corner of the row.
 - Add-to-cart: `rounded-full` `--accent-primary` "＋" carrying `data-add-to-cart`.
 - **Low/empty stock:** amber-gold `--accent-gold` "Pocas unidades" pill when `0 < stock ≤ 5`; the
   add action is replaced by an "Agotado" chip at `stock = 0`.
