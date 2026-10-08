@@ -100,9 +100,7 @@
     return null;
   }
 
-  function onColumnClick(event: MouseEvent, date: string) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const time = timeAtOffsetY(event.clientY - rect.top);
+  function activateCell(date: string, time: string) {
     const occupant = occupantAt(date, time);
     if (!occupant) {
       nbDate = date;
@@ -118,6 +116,18 @@
       const block = blocks.find((b) => b.id === occupant.id);
       if (block) managing = block;
     }
+  }
+
+  function onColumnClick(event: MouseEvent, date: string) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    activateCell(date, timeAtOffsetY(event.clientY - rect.top));
+  }
+
+  function onDayKeydown(event: KeyboardEvent, date: string) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    // Keyboard activation uses the first row of the day column.
+    activateCell(date, rows[0]);
   }
 
   function openBooking(booking: Booking) {
@@ -251,7 +261,11 @@
           <div
             class="daycol"
             class:today={day.isToday}
+            role="button"
+            tabindex="0"
+            aria-label={`Agenda del ${day.label}. Usar Enter o Espacio para bloquear un horario o ver una cita.`}
             onclick={(e) => onColumnClick(e, day.date)}
+            onkeydown={(e) => onDayKeydown(e, day.date)}
           >
             <span class="day-head">{day.label}</span>
             {#each blocks.filter((b) => b.date === day.date) as block (block.id)}
@@ -492,6 +506,11 @@
       transparent 0 39px,
       var(--divider-subtle) 39px 40px
     );
+  }
+
+  .daycol:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
   }
 
   .daycol.today {

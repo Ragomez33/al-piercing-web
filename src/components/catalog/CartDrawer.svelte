@@ -187,7 +187,7 @@
         <fieldset class="pay">
           <legend>Método de pago de preferencia</legend>
           <div class="pay-options">
-            {#each PAYMENT_METHODS as m}
+            {#each PAYMENT_METHODS as m (m.value)}
               <button
                 type="button"
                 class="pay-opt"
