@@ -10,9 +10,6 @@ function envString(value: unknown, fallback: string): string {
 /** Destination WhatsApp number for bookings & cart orders (digits only, country code). */
 export const WHATSAPP_PHONE: string = envString(import.meta.env.PUBLIC_WHATSAPP_PHONE, "5215500000000");
 
-/** Simple admin PIN gate (default per feature spec). */
-export const ADMIN_PIN: string = envString(import.meta.env.PUBLIC_ADMIN_PIN, "1234");
-
 export interface PaymentChannel {
   label: string;
   ref: string;

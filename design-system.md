@@ -17,7 +17,7 @@ the studio (admin). These are the only modules of the product (governance §1.1)
 | `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos y bloque de proceso | `/` | Implemented |
 | `catalog` | Catálogo de argollas y labrets de titanio, joyería zirconia/navel y kits de aftercare con carrito flotante y checkout pre-llenado a WhatsApp | `/catalog` | Implemented |
 | `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de seña con salida a WhatsApp | `/booking` | Implemented |
-| `admin` | Panel privado protegido por PIN con pestañas **Agenda/Citas** (confirmar, cancelar, filtro por fecha) e **Inventario** (stock inline, publicar/ocultar, alta de productos) sobre la capa híbrida de datos | `/admin` | Implemented |
+| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Agenda/Citas** (confirmar, cancelar, filtro por fecha) e **Inventario** (stock inline, publicar/ocultar, alta de productos) sobre la capa híbrida de datos | `/admin` | Implemented |
 
 > **History:** v1.x of this document described **Foundly POS** (a local-first point-of-sale app).
 > v2.0.0 re-labeled it as *Tattoo Art* but kept a React Native/Gluestack description that never

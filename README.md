@@ -9,7 +9,7 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50% → mensaje pre-llenado a WhatsApp |
-| `/admin` | Panel | Protegido por PIN: pestaña Agenda/Citas (confirmar, cancelar, filtro por fecha) e Inventario (stock inline, publicar/ocultar, alta de productos) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): pestaña Agenda/Citas (confirmar, cancelar, filtro por fecha) e Inventario (stock inline, publicar/ocultar, alta de productos) |
 
 ## Datos (capa híbrida)
 

@@ -1,8 +1,8 @@
 /**
  * Production adapter — reads/writes Supabase using only the public anon key.
+ * Uses the SHARED client (feature 005) so requests carry the authenticated session.
  * Rows are narrowed at the boundary; failures become typed DataError (no false-success writes).
  */
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   DataError,
   type Booking,
@@ -15,15 +15,7 @@ import {
 } from "../../types/domain";
 import { calcDepositCents } from "../../utils/money";
 import { PIERCING_SERVICES, type PiercingService } from "../services";
-
-function getClient(): SupabaseClient {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const anon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (typeof url !== "string" || url.length === 0 || typeof anon !== "string" || anon.length === 0) {
-    throw new DataError("Supabase no está configurado");
-  }
-  return createClient(url, anon);
-}
+import { getSupabaseClient } from "../supabase-client";
 
 interface BookingRow {
   id: string;
@@ -96,7 +88,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async listProducts({ includeUnpublished }): Promise<ProductRecord[]> {
-      const client = getClient();
+      const client = getSupabaseClient();
       let query = client.from("products").select("*");
       if (!includeUnpublished) query = query.eq("published", true);
       const { data, error } = await query;
@@ -105,7 +97,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async createProduct(input: NewProductInput): Promise<ProductRecord> {
-      const client = getClient();
+      const client = getSupabaseClient();
       const { data, error } = await client
         .from("products")
         .insert({ name: input.name, category: input.category, price_cents: input.priceCents, stock: input.stock, image: input.image, published: true })
@@ -116,7 +108,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async updateProduct(id, patch): Promise<ProductRecord> {
-      const client = getClient();
+      const client = getSupabaseClient();
       const { data, error } = await client
         .from("products")
         .update({ stock: patch.stock, published: patch.published })
@@ -128,7 +120,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async listBookings(input): Promise<Booking[]> {
-      const client = getClient();
+      const client = getSupabaseClient();
       let query = client.from("bookings").select("*").order("date").order("time_slot");
       if (input?.date) query = query.eq("date", input.date);
       const { data, error } = await query;
@@ -137,7 +129,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async createBooking(input: NewBookingInput): Promise<Booking> {
-      const client = getClient();
+      const client = getSupabaseClient();
       const { data, error } = await client
         .from("bookings")
         .insert({
@@ -159,7 +151,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
-      const client = getClient();
+      const client = getSupabaseClient();
       const { data, error } = await client
         .from("bookings")
         .update({ status })
@@ -171,7 +163,7 @@ export function createSupabaseAdapter(): DataStore {
     },
 
     async getBookedSlots(date: string): Promise<string[]> {
-      const client = getClient();
+      const client = getSupabaseClient();
       const { data, error } = await client
         .from("bookings")
         .select("time_slot")

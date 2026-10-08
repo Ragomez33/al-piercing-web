@@ -1,19 +1,31 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Lock, Plus, X } from "lucide-svelte";
-  import { ADMIN_PIN } from "../../lib/config";
+  import { onDestroy, onMount } from "svelte";
+  import { Lock, LogOut, Plus, X } from "lucide-svelte";
+  import {
+    getActiveSession,
+    onAuthStateChange,
+    signInWithEmailPassword,
+    signOut,
+  } from "../../lib/auth";
   import { DataError, dataStore } from "../../lib/data/store";
+  import { isSupabaseConfigured } from "../../lib/data/supabase-client";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
   import type { Booking, BookingStatus, ProductRecord } from "../../lib/types/domain";
   import { formatCents } from "../../lib/utils/money";
 
   type AdminTab = "bookings" | "catalog";
+  type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
-  let unlocked = $state(false);
-  let pin = $state("");
-  let pinError = $state("");
+  let status = $state<GateStatus>("checking");
+  let adminEmail = $state("");
+
+  // Login form
+  let email = $state("");
+  let password = $state("");
+  let loginError = $state("");
+  let signingIn = $state(false);
+
   let tab = $state<AdminTab>("bookings");
-
   let mode = $state(dataStore.mode);
 
   // Bookings state
@@ -68,31 +80,80 @@
     }
   }
 
-  // --- PIN gate ---
-  function unlock() {
-    if (pin === ADMIN_PIN) {
-      sessionStorage.setItem("alpi:admin:unlocked", "1");
-      unlocked = true;
-      pinError = "";
-      pin = "";
+  // --- Auth gate (feature 005: replaces PIN) ---
+  async function submitLogin(event: SubmitEvent) {
+    event.preventDefault();
+    const value = email.trim();
+    if (!value || !password) {
+      loginError = "Completá email y contraseña";
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      loginError = "Ingresá un email válido";
+      return;
+    }
+    signingIn = true;
+    loginError = "";
+    try {
+      const session = await signInWithEmailPassword(value, password);
+      adminEmail = session.email;
+      status = "dashboard";
+      email = "";
+      password = "";
       void refresh();
-    } else {
-      pinError = "PIN incorrecto";
+    } catch (err) {
+      loginError = err instanceof DataError ? err.message : "Error de autenticación";
+    } finally {
+      signingIn = false;
     }
   }
 
-  function lock() {
-    sessionStorage.removeItem("alpi:admin:unlocked");
-    unlocked = false;
-    bookings = [];
-    products = [];
+  async function logout() {
+    try {
+      await signOut();
+    } catch {
+      // onAuthStateChange still flips to login; no action needed here.
+    }
   }
 
-  // --- Bookings actions (US1) ---
-  async function setStatus(bookingId: string, status: BookingStatus) {
+  let unsubscribeAuth: (() => void) | null = null;
+
+  onMount(async () => {
+    if (!isSupabaseConfigured()) {
+      status = "notice";
+      return;
+    }
+    const session = await getActiveSession();
+    if (session) {
+      adminEmail = session.email;
+      status = "dashboard";
+      void refresh();
+    } else {
+      status = "login";
+    }
+    unsubscribeAuth = onAuthStateChange((sessionEmail) => {
+      if (sessionEmail) {
+        adminEmail = sessionEmail;
+        status = "dashboard";
+        void refresh();
+      } else {
+        status = "login";
+        adminEmail = "";
+        bookings = [];
+        products = [];
+      }
+    });
+  });
+
+  onDestroy(() => {
+    unsubscribeAuth?.();
+  });
+
+  // --- Bookings actions (US1 feature 004) ---
+  async function setStatus(bookingId: string, bookingStatus: BookingStatus) {
     busy[bookingId] = true;
     try {
-      await dataStore.updateBookingStatus(bookingId, status);
+      await dataStore.updateBookingStatus(bookingId, bookingStatus);
       await refresh();
     } catch (err) {
       bookingsError = err instanceof DataError ? err.message : "No se pudo actualizar la cita";
@@ -101,13 +162,13 @@
     }
   }
 
-  // --- Catalog actions (US3) ---
+  // --- Catalog actions (US3 feature 004) ---
   async function saveStock(product: ProductRecord) {
     const next = stockDraft[product.id];
     if (next === undefined || !Number.isInteger(next) || next < 0) return;
     saving[product.id] = true;
     try {
-      products = await dataStore.updateProduct(product.id, { stock: next });
+      await dataStore.updateProduct(product.id, { stock: next });
       delete stockDraft[product.id];
       await refresh();
     } catch (err) {
@@ -127,11 +188,6 @@
     } finally {
       saving[product.id] = false;
     }
-  }
-
-  function openCreate() {
-    createError = "";
-    showCreate = true;
   }
 
   function closeCreate() {
@@ -169,35 +225,53 @@
       createError = err instanceof DataError ? err.message : "No se pudo crear el producto";
     }
   }
-
-  onMount(() => {
-    unlocked = sessionStorage.getItem("alpi:admin:unlocked") === "1";
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("tab") === "catalog") tab = "catalog";
-    if (unlocked) void refresh();
-  });
 </script>
 
-{#if !unlocked}
-  <section class="gate" aria-labelledby="gate-title">
-    <h2 id="gate-title">Panel protegido</h2>
-    <p class="gate-hint">Ingresá el PIN para gestionar citas y catálogo.</p>
-    <form onsubmit={(e) => { e.preventDefault(); unlock(); }}>
-      <label class="field" for="admin-pin">PIN de acceso</label>
+{#if status === "checking"}
+  <section class="gate">
+    <p class="hint" aria-live="polite">Verificando sesión…</p>
+  </section>
+{:else if status === "notice"}
+  <section class="gate" role="alert">
+    <h2>Panel requiere configuración</h2>
+    <p class="gate-hint">
+      La administración necesita Supabase configurado
+      (<code>PUBLIC_SUPABASE_URL</code> + <code>PUBLIC_SUPABASE_ANON_KEY</code>).
+    </p>
+    <a class="ghost" href="/">← Volver al inicio</a>
+  </section>
+{:else if status === "login"}
+  <section class="gate login" aria-labelledby="login-title">
+    <span class="login-icon" aria-hidden="true"><Lock size={22} /></span>
+    <h2 id="login-title">Panel protegido</h2>
+    <p class="gate-hint">Ingresá con el usuario del estudio.</p>
+
+    <form onsubmit={submitLogin}>
+      <label class="field" for="login-email">Email</label>
       <input
-        id="admin-pin"
-        type="password"
-        inputmode="numeric"
-        autocomplete="current-password"
-        placeholder="••••"
-        bind:value={pin}
-        aria-invalid={!!pinError}
-        aria-describedby="pin-error"
+        id="login-email"
+        type="email"
+        autocomplete="username"
+        bind:value={email}
+        aria-invalid={!!loginError && !email}
       />
-      {#if pinError}
-        <p class="error" id="pin-error" role="alert">{pinError}</p>
+
+      <label class="field" for="login-password">Contraseña</label>
+      <input
+        id="login-password"
+        type="password"
+        autocomplete="current-password"
+        bind:value={password}
+        aria-invalid={!!loginError && !password}
+      />
+
+      {#if loginError}
+        <p class="error" id="login-error" role="alert">{loginError}</p>
       {/if}
-      <button type="submit" class="primary">Desbloquear</button>
+
+      <button type="submit" class="primary" disabled={signingIn}>
+        {signingIn ? "Ingresando…" : "Ingresar"}
+      </button>
     </form>
   </section>
 {:else}
@@ -206,7 +280,10 @@
       <h1>Panel del Estudio</h1>
       <div class="head-actions">
         <span class="mode-badge">Modo {mode}</span>
-        <button type="button" class="ghost" onclick={lock}>Bloquear</button>
+        <span class="admin-email" title="Sesión activa">{adminEmail}</span>
+        <button type="button" class="ghost" onclick={logout}>
+          <LogOut size={16} aria-hidden="true" /> Cerrar Sesión
+        </button>
       </div>
     </header>
 
@@ -292,7 +369,7 @@
       {/if}
     {:else}
       <div class="toolbar">
-        <button type="button" class="primary" onclick={openCreate}>
+        <button type="button" class="primary" onclick={() => { createError = ""; showCreate = true; }}>
           <Plus size={18} aria-hidden="true" /> Nuevo Producto
         </button>
       </div>
@@ -419,6 +496,28 @@
     text-align: center;
   }
 
+  .login {
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glow);
+    padding: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .login-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+    margin-bottom: 0.75rem;
+  }
+
   h2 {
     margin: 0 0 0.5rem;
     color: var(--text-primary);
@@ -435,6 +534,12 @@
     flex-direction: column;
     gap: 0.75rem;
     margin-top: 1rem;
+    text-align: left;
+  }
+
+  code {
+    font-family: ui-monospace, monospace;
+    color: var(--text-gold);
   }
 
   .field {
@@ -465,7 +570,8 @@
 
   .field input:focus-visible,
   .field select:focus-visible,
-  .icon-btn:focus-visible {
+  .icon-btn:focus-visible,
+  .ghost:focus-visible {
     outline: 2px solid var(--accent-primary);
     outline-offset: 1px;
   }
@@ -495,6 +601,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .mode-badge {
@@ -507,6 +614,11 @@
     text-transform: uppercase;
     padding: 0.35rem 0.8rem;
     border-radius: var(--radius-pill);
+  }
+
+  .admin-email {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
   }
 
   .tabs {
@@ -580,6 +692,7 @@
     background: var(--bg-badge-pill);
     color: var(--text-secondary);
     border: var(--border-card);
+    text-decoration: none;
   }
 
   .danger {
