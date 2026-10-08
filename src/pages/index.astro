@@ -160,11 +160,11 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
     justify-content: center;
     min-height: 50px;
     padding: 0.8rem 1.6rem;
-    border-radius: var(--radius-pill);
-    font-weight: 700;
+    border-radius: var(--radius-btn);
+    font-weight: 600;
     font-size: 1rem;
     text-decoration: none;
-    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
   }
 
   .cta-primary {
@@ -175,21 +175,21 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
 
   .cta-primary:hover,
   .cta-primary:focus-visible {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 30px var(--accent-primary-glow);
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
   }
 
   .cta-secondary {
-    background: var(--bg-badge-pill);
+    background: var(--bg-btn-secondary);
     color: var(--text-primary);
-    border: var(--border-card);
+    border: var(--border-btn-secondary);
   }
 
   .cta-secondary:hover,
   .cta-secondary:focus-visible {
-    background: var(--bg-pill-hover);
+    border: var(--border-btn-secondary-hover);
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
   }

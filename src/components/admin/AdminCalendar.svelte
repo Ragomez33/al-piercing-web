@@ -673,8 +673,8 @@
     justify-content: center;
     min-height: 44px;
     padding: 0.5rem 1.1rem;
-    border-radius: var(--radius-pill);
-    font-weight: 700;
+    border-radius: var(--radius-btn);
+    font-weight: 600;
     cursor: pointer;
     border: none;
   }
@@ -683,12 +683,23 @@
     background: var(--accent-primary);
     color: var(--accent-on);
     box-shadow: var(--shadow-glow);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
   }
 
   .ghost {
-    background: var(--bg-badge-pill);
+    background: var(--bg-btn-secondary);
     color: var(--text-secondary);
-    border: var(--border-card);
+    border: var(--border-btn-secondary);
+    transition: border-color 160ms ease;
+  }
+
+  .ghost:hover {
+    border: var(--border-btn-secondary-hover);
   }
 
   .danger {

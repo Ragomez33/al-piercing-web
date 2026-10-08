@@ -53,6 +53,20 @@
   /* Global footer surface */
   --bg-footer: #0D0D0F;
 
+  /* Docked public navbar (glass capsule) — feature 008 */
+  --bg-navbar-glass: rgba(17, 17, 19, 0.85);
+  --blur-navbar: 16px;
+  --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+  --border-glass-strong: 1px solid rgba(255, 255, 255, 0.12);
+  --shadow-dock: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+
+  /* Button system (Dark Gold) — feature 008 */
+  --radius-btn: 12px;
+  --glow-btn-primary: 0 4px 20px rgba(229, 169, 60, 0.3);
+  --bg-btn-secondary: rgba(255, 255, 255, 0.04);
+  --border-btn-secondary: 1px solid rgba(255, 255, 255, 0.12);
+  --border-btn-secondary-hover: 1px solid rgba(229, 169, 60, 0.4);
+
   /* Geometry & Elevation */
   --radius-card: 16px;
   --radius-pill: 9999px;

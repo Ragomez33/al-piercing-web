@@ -51,6 +51,14 @@ src/
 Todos los colores, radios y sombras viven en **`src/styles/tokens.css`**. Cambiar la paleta del cliente
 es editar ese único archivo: los componentes consumen exclusivamente `var(--token)`.
 
+- **Isotipo/logo**: `public/images/logo.png`, referenciado como `BRAND_LOGO` en `src/lib/config.ts`;
+  se usa en favicon/apple-touch, el dock de navegación pública, el header de administración
+  ("ALPIERCING Admin") y el footer junto a la firma FORGE Labs.
+- **Navbar pública**: cápsula glassmorphism flotante (dark glass, blur, borde sutil, sombra dock);
+  no se renderiza en `/admin`.
+- **Botones**: sistema Dark Gold con tokens (`--radius-btn`, `--glow-btn-primary`,
+  `--bg-btn-secondary`, `--border-btn-secondary{,-hover}`).
+
 Antes de publicar, reemplaza el placeholder de WhatsApp en `src/lib/config.ts` (`WHATSAPP_PHONE`, solo
 dígitos con código de país).
 

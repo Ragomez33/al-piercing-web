@@ -101,14 +101,22 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - A `site-footer` renders the brand and current year.
 
 ### Header (`AppHeader.astro`) — implemented
-- Sticky, transparent header that integrates with the top gradient (no own surface).
-- **Brand lockup**: `STUDIO_PROFILE.brand` (`ALPIERCING`) rendered in `--text-gold` with a soft
-  gold text-shadow, over the tagline `STUDIO_PROFILE.tagline` (`TRAINING / PIERCING STUDIO`) in
-  `--text-secondary`; centered.
+- **Docked glass capsule (feature 008)**: the public header renders as a centered rounded pill
+  (`max-width: 650px`, `margin-top: 1rem`, `border-radius: var(--radius-pill)`) with a dark glass
+  surface (`--bg-navbar-glass`, `backdrop-filter: blur(var(--blur-navbar))`, `--border-glass`,
+  `--shadow-dock`).
+- **Brand**: `STUDIO_PROFILE.brand` (`ALPIERCING`) in `--text-gold`, beside the logo
+  (`BRAND_LOGO` → `/images/logo.png`, `mix-blend-mode: screen`) at the left of the capsule.
 - **Navigation**: pill links for `NAV_ITEMS` — Inicio (`/`), Catálogo (`/catalog`),
-  Reservar (`/booking`). Pills use `--bg-badge-pill`, hover `--bg-pill-hover`, focus ring
-  `--accent-primary`; targets ≥ 44px.
-- Admin (`/admin`) is intentionally **not** linked in the public nav.
+  Reservar (`/booking`); targets ≥ 44px.
+- **Rendering scope**: the public header renders ONLY on public routes; `/admin` hides it and uses
+  the admin panel header (logo + "ALPIERCING Admin" + `[Cerrar Sesión]`).
+
+### Button system (feature 008)
+- `btn-primary`: `--accent-primary` fill, `--accent-on` text (weight 600), `--radius-btn` (12px),
+  hover `translateY(-1px)` + `--glow-btn-primary`.
+- `btn-secondary`: `--bg-btn-secondary`, `--border-btn-secondary`, hover `--border-btn-secondary-hover`.
+- Pill radius (`--radius-pill`) is preserved for nav links, the FAB, calendar slot pills and badges.
 
 ### Filters & selectors
 - **Category pills** (catalog): `--bg-badge-pill` background, `--text-secondary` text,

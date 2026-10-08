@@ -10,6 +10,12 @@ function envString(value: unknown, fallback: string): string {
 /** Destination WhatsApp number for bookings & cart orders (digits only, country code). */
 export const WHATSAPP_PHONE: string = envString(import.meta.env.PUBLIC_WHATSAPP_PHONE, "5215500000000");
 
+/** Brand icon/logo asset (public assets served at site root). */
+export const BRAND_LOGO: string = "/images/logo.png";
+
+/** Admin route prefix; the public navigation is hidden there (feature 008). */
+export const ADMIN_PREFIX: string = "/admin";
+
 export interface PaymentChannel {
   label: string;
   ref: string;

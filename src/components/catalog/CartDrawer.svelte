@@ -452,12 +452,20 @@
   .pay-opt {
     min-height: 44px;
     padding: 0.5rem 1rem;
-    border-radius: var(--radius-pill);
-    border: var(--border-card);
-    background: var(--bg-badge-pill);
+    border-radius: var(--radius-btn);
+    border: var(--border-btn-secondary);
+    background: var(--bg-btn-secondary);
     color: var(--text-secondary);
     font-weight: 600;
     cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  .pay-opt:hover,
+  .pay-opt:focus-visible {
+    border: var(--border-btn-secondary-hover);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 
   .pay-opt.active {
@@ -466,20 +474,29 @@
     box-shadow: var(--shadow-glow);
   }
 
-  .pay-opt:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
+  .pay-opt.active:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
   }
 
   .checkout {
     min-height: 50px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-btn);
     border: none;
     background: var(--accent-primary);
     color: var(--accent-on);
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     box-shadow: var(--shadow-glow);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+
+  .checkout:hover:not(:disabled),
+  .checkout:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 
   .checkout:disabled {
@@ -491,11 +508,19 @@
 
   .clear {
     min-height: 44px;
-    border-radius: var(--radius-pill);
-    border: var(--border-card);
-    background: var(--bg-card-light);
+    border-radius: var(--radius-btn);
+    border: var(--border-btn-secondary);
+    background: var(--bg-btn-secondary);
     color: var(--accent-negative);
     font-weight: 600;
     cursor: pointer;
+    transition: border-color 160ms ease;
+  }
+
+  .clear:hover,
+  .clear:focus-visible {
+    border: var(--border-btn-secondary-hover);
+    outline: 2px solid var(--accent-negative);
+    outline-offset: 2px;
   }
 </style>

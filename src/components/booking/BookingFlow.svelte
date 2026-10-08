@@ -534,11 +534,11 @@
 
   .submit {
     min-height: 52px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-btn);
     border: none;
     background: var(--accent-primary);
     color: var(--accent-on);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
     box-shadow: var(--shadow-glow);
@@ -547,7 +547,8 @@
 
   .submit:hover:not(:disabled),
   .submit:focus-visible {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
   }

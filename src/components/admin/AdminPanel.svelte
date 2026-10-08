@@ -9,6 +9,7 @@
   } from "../../lib/auth";
   import { DataError, dataStore } from "../../lib/data/store";
   import { isSupabaseConfigured } from "../../lib/data/supabase-client";
+  import { BRAND_LOGO } from "../../lib/config";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
   import type { ProductRecord } from "../../lib/types/domain";
   import { formatCents } from "../../lib/utils/money";
@@ -247,7 +248,10 @@
 {:else}
   <section class="panel" aria-label="Panel de administración">
     <header class="panel-head">
-      <h1>Panel del Estudio</h1>
+      <div class="brand-row">
+        <img class="panel-logo" src={BRAND_LOGO} alt="ALPIERCING logo" width="32" height="32" />
+        <h1>ALPIERCING Admin</h1>
+      </div>
       <div class="head-actions">
         <span class="mode-badge">Modo {mode}</span>
         <span class="admin-email" title="Sesión activa">{adminEmail}</span>
@@ -498,9 +502,30 @@
     margin-bottom: 1.25rem;
   }
 
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .panel-logo {
+    height: 32px;
+    width: auto;
+    object-fit: contain;
+  }
+
   h1 {
     margin: 0;
-    font-size: 1.9rem;
+    font-size: 1.6rem;
     color: var(--text-primary);
   }
 
@@ -570,8 +595,8 @@
     gap: 0.4rem;
     min-height: 44px;
     padding: 0.5rem 1.1rem;
-    border-radius: var(--radius-pill);
-    font-weight: 700;
+    border-radius: var(--radius-btn);
+    font-weight: 600;
     cursor: pointer;
     border: none;
   }
@@ -586,6 +611,12 @@
     background: var(--accent-primary);
     color: var(--accent-on);
     box-shadow: var(--shadow-glow);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--glow-btn-primary);
   }
 
   .primary:disabled {
@@ -595,10 +626,15 @@
   }
 
   .ghost {
-    background: var(--bg-badge-pill);
+    background: var(--bg-btn-secondary);
     color: var(--text-secondary);
-    border: var(--border-card);
+    border: var(--border-btn-secondary);
     text-decoration: none;
+    transition: border-color 160ms ease;
+  }
+
+  .ghost:hover {
+    border: var(--border-btn-secondary-hover);
   }
 
   .rows {

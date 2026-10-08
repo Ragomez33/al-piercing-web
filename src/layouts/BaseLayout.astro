@@ -4,13 +4,14 @@ import InkBackgroundCanvas from "../components/canvas/InkBackgroundCanvas.svelte
 import AppHeader from "../components/ui/AppHeader.astro";
 import Footer from "../components/Footer.astro";
 import { STUDIO_PROFILE } from "../lib/types/content";
-import { THEME_COLOR } from "../lib/config";
+import { ADMIN_PREFIX, BRAND_LOGO, THEME_COLOR } from "../lib/config";
 
 interface Props {
   title?: string;
 }
 
 const { title = `${STUDIO_PROFILE.brand} — ${STUDIO_PROFILE.tagline}` } = Astro.props;
+const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
 ---
 
 <!doctype html>
@@ -22,6 +23,8 @@ const { title = `${STUDIO_PROFILE.brand} — ${STUDIO_PROFILE.tagline}` } = Astr
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={STUDIO_PROFILE.bio} />
     <meta name="theme-color" content={THEME_COLOR} />
+    <link rel="icon" type="image/png" href={BRAND_LOGO} />
+    <link rel="apple-touch-icon" href={BRAND_LOGO} />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
   </head>
@@ -30,7 +33,7 @@ const { title = `${STUDIO_PROFILE.brand} — ${STUDIO_PROFILE.tagline}` } = Astr
       <InkBackgroundCanvas client:only="svelte" />
     </div>
     <div class="top-gradient" aria-hidden="true"></div>
-    <AppHeader />
+    {!isAdmin && <AppHeader />}
     <main id="main">
       <slot />
     </main>
