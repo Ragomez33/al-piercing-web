@@ -1,8 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import CartDrawer from "../components/catalog/CartDrawer.svelte";
-import ProductCard from "../components/catalog/ProductCard.svelte";
-import { PRODUCTS, type ProductCategory } from "../lib/types/content";
+import CatalogGrid from "../components/catalog/CatalogGrid.svelte";
+import { type ProductCategory } from "../lib/types/content";
 
 const CATEGORIES: ProductCategory[] = ["Argollas & Labrets", "Zirconia & Navel", "Aftercare"];
 ---
@@ -19,17 +19,15 @@ const CATEGORIES: ProductCategory[] = ["Argollas & Labrets", "Zirconia & Navel",
         Todos
       </button>
       {
-        CATEGORIES.map((c) => (
-          <button type="button" class="pill" data-category={c} aria-pressed="false">
-            {c}
+        CATEGORIES.map((category) => (
+          <button type="button" class="pill" data-category={category} aria-pressed="false">
+            {category}
           </button>
         ))
       }
     </div>
 
-    <div class="grid">
-      {PRODUCTS.map((p) => <ProductCard product={p} />)}
-    </div>
+    <CatalogGrid client:load />
 
     <CartDrawer client:load />
   </section>
@@ -87,28 +85,10 @@ const CATEGORIES: ProductCategory[] = ["Argollas & Labrets", "Zirconia & Navel",
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
   }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-
-  @media (min-width: 768px) {
-    .grid {
-      grid-template-columns: repeat(4, 1fr);
-    }
-  }
-
-  @media (max-width: 360px) {
-    .grid {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>
 
 <style is:global>
-  /* Toggled by the CartDrawer island (data-category filter), applied to static grid cards. */
+  /* Toggled by the CartDrawer island (data-category filter), applied to catalog grid cards. */
   .is-hidden {
     display: none !important;
   }

@@ -88,6 +88,12 @@ export const PROCESS_STEPS: ProcessStep[] = [
  */
 export type ProductCategory = "Argollas & Labrets" | "Zirconia & Navel" | "Aftercare";
 
+export const PRODUCT_CATEGORIES: ProductCategory[] = [
+  "Argollas & Labrets",
+  "Zirconia & Navel",
+  "Aftercare",
+];
+
 export interface Product {
   /** REQUIRED, non-empty, unique across catalog */
   id: string;

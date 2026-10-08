@@ -1,0 +1,184 @@
+/**
+ * Production adapter — reads/writes Supabase using only the public anon key.
+ * Rows are narrowed at the boundary; failures become typed DataError (no false-success writes).
+ */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  DataError,
+  type Booking,
+  type BookingStatus,
+  type DataMode,
+  type DataStore,
+  type NewBookingInput,
+  type NewProductInput,
+  type ProductRecord,
+} from "../../types/domain";
+import { calcDepositCents } from "../../utils/money";
+import { PIERCING_SERVICES, type PiercingService } from "../services";
+
+function getClient(): SupabaseClient {
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const anon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  if (typeof url !== "string" || url.length === 0 || typeof anon !== "string" || anon.length === 0) {
+    throw new DataError("Supabase no está configurado");
+  }
+  return createClient(url, anon);
+}
+
+interface BookingRow {
+  id: string;
+  created_at: string;
+  client_name: string;
+  client_whatsapp: string;
+  service_id: string;
+  service_name: string;
+  price_cents: number;
+  deposit_cents: number;
+  date: string;
+  time_slot: string;
+  status: string;
+  notes?: string | null;
+}
+
+interface ProductRow {
+  id: string;
+  name: string;
+  category: string;
+  price_cents: number;
+  stock: number;
+  image: string;
+  published: boolean;
+}
+
+function toBooking(row: BookingRow): Booking {
+  const status: BookingStatus =
+    row.status === "CONFIRMED" ? "CONFIRMED" : row.status === "CANCELLED" ? "CANCELLED" : "PENDING";
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    clientName: row.client_name,
+    clientWhatsapp: row.client_whatsapp,
+    serviceId: row.service_id,
+    serviceName: row.service_name,
+    priceCents: row.price_cents,
+    depositCents: row.deposit_cents,
+    date: row.date,
+    timeSlot: row.time_slot,
+    status,
+    notes: row.notes ?? undefined,
+  };
+}
+
+function toProduct(row: ProductRow): ProductRecord {
+  const category = row.category;
+  if (category !== "Argollas & Labrets" && category !== "Zirconia & Navel" && category !== "Aftercare") {
+    throw new DataError(`Categoría de producto inválida: ${category}`);
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    category,
+    priceCents: row.price_cents,
+    stock: row.stock,
+    image: row.image,
+    published: row.published,
+  };
+}
+
+export function createSupabaseAdapter(): DataStore {
+  const mode: DataMode = "production";
+
+  return {
+    mode,
+
+    async listServices(): Promise<PiercingService[]> {
+      return PIERCING_SERVICES;
+    },
+
+    async listProducts({ includeUnpublished }): Promise<ProductRecord[]> {
+      const client = getClient();
+      let query = client.from("products").select("*");
+      if (!includeUnpublished) query = query.eq("published", true);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toProduct(row as unknown as ProductRow));
+    },
+
+    async createProduct(input: NewProductInput): Promise<ProductRecord> {
+      const client = getClient();
+      const { data, error } = await client
+        .from("products")
+        .insert({ name: input.name, category: input.category, price_cents: input.priceCents, stock: input.stock, image: input.image, published: true })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toProduct(data as unknown as ProductRow);
+    },
+
+    async updateProduct(id, patch): Promise<ProductRecord> {
+      const client = getClient();
+      const { data, error } = await client
+        .from("products")
+        .update({ stock: patch.stock, published: patch.published })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toProduct(data as unknown as ProductRow);
+    },
+
+    async listBookings(input): Promise<Booking[]> {
+      const client = getClient();
+      let query = client.from("bookings").select("*").order("date").order("time_slot");
+      if (input?.date) query = query.eq("date", input.date);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toBooking(row as unknown as BookingRow));
+    },
+
+    async createBooking(input: NewBookingInput): Promise<Booking> {
+      const client = getClient();
+      const { data, error } = await client
+        .from("bookings")
+        .insert({
+          client_name: input.clientName,
+          client_whatsapp: input.clientWhatsapp,
+          service_id: input.serviceId,
+          service_name: input.serviceName,
+          price_cents: input.priceCents,
+          deposit_cents: calcDepositCents(input.priceCents),
+          date: input.date,
+          time_slot: input.timeSlot,
+          status: "PENDING",
+          notes: input.notes ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toBooking(data as unknown as BookingRow);
+    },
+
+    async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
+      const client = getClient();
+      const { data, error } = await client
+        .from("bookings")
+        .update({ status })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toBooking(data as unknown as BookingRow);
+    },
+
+    async getBookedSlots(date: string): Promise<string[]> {
+      const client = getClient();
+      const { data, error } = await client
+        .from("bookings")
+        .select("time_slot")
+        .eq("date", date)
+        .in("status", ["PENDING", "CONFIRMED"]);
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
+    },
+  };
+}

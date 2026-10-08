@@ -24,6 +24,8 @@
   --accent-positive: #34D399;
   --accent-negative: #F87171;
   --accent-gold: #E5A93C;
+  --accent-positive-tint: rgba(52, 211, 153, 0.15);
+  --accent-negative-tint: rgba(248, 113, 113, 0.15);
 
   /* Typography & Text */
   --text-primary: #F4F4F5;

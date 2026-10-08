@@ -1,9 +1,34 @@
 /**
  * Runtime configuration (single-store ALPIERCING).
- * Replace the placeholder with the studio's real WhatsApp number (digits only, country code
- * included, e.g. "5215500000000") before launch.
+ * Env-overridable via PUBLIC_* variables (inlined by Astro at build time); each value has a
+ * documented fallback so the site never breaks in demo mode.
  */
-export const WHATSAPP_PHONE = "5215500000000";
+function envString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+/** Destination WhatsApp number for bookings & cart orders (digits only, country code). */
+export const WHATSAPP_PHONE: string = envString(import.meta.env.PUBLIC_WHATSAPP_PHONE, "5215500000000");
+
+/** Simple admin PIN gate (default per feature spec). */
+export const ADMIN_PIN: string = envString(import.meta.env.PUBLIC_ADMIN_PIN, "1234");
+
+export interface PaymentChannel {
+  label: string;
+  ref: string;
+}
+
+/** Pago Móvil details shown on the deposit summary (placeholder refs until configured). */
+export const PAYMENT_PAGO_MOVIL: PaymentChannel = {
+  label: "Pago Móvil",
+  ref: envString(import.meta.env.PUBLIC_PAGO_MOVIL_REF, "0414-000-0000"),
+};
+
+/** Binance Pay details shown on the deposit summary (placeholder refs until configured). */
+export const PAYMENT_BINANCE_PAY: PaymentChannel = {
+  label: "Binance Pay",
+  ref: envString(import.meta.env.PUBLIC_BINANCE_PAY_ID, "ALPIERCING-PAY"),
+};
 
 /**
  * Browser chrome theme color. Kept as a literal because `<meta name="theme-color">` cannot

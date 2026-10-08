@@ -4,7 +4,9 @@
   import { PIERCING_SERVICES, type PiercingService } from "../../lib/data/services";
   import { buildBookingWhatsAppLink } from "../../lib/utils/booking";
   import { calcDepositCents, formatCents } from "../../lib/utils/money";
-  import { WHATSAPP_PHONE } from "../../lib/config";
+  import { PAYMENT_BINANCE_PAY, PAYMENT_PAGO_MOVIL, WHATSAPP_PHONE } from "../../lib/config";
+  import { DataError, dataStore } from "../../lib/data/store";
+  import { agendaTimes, localISODate } from "../../lib/utils/dates";
 
   let selected = $state<PiercingService | null>(null);
   let date = $state("");
@@ -13,37 +15,35 @@
   let clientWhatsapp = $state("");
   let notes = $state("");
 
-  const today = (() => {
-    const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 10);
-  })();
+  // Real availability via the data layer (FR-004) — no deterministic fake agenda.
+  let bookedSlots = $state<string[]>([]);
+  let slotsLoading = $state(false);
+  let submitError = $state("");
+  let submitting = $state(false);
 
-  // Agenda: 11:00 → 19:30 every 30 minutes.
-  const SLOT_START_MIN = 11 * 60;
-  const SLOT_END_MIN = 19 * 60 + 30;
-  const SLOT_STEP_MIN = 30;
+  const today = localISODate();
+  const slots = agendaTimes();
 
-  function buildSlots(): string[] {
-    const out: string[] = [];
-    for (let m = SLOT_START_MIN; m <= SLOT_END_MIN; m += SLOT_STEP_MIN) {
-      const h = Math.floor(m / 60).toString().padStart(2, "0");
-      const mm = (m % 60).toString().padStart(2, "0");
-      out.push(`${h}:${mm}`);
+  async function onDateChange() {
+    time = "";
+    submitError = "";
+    if (!date) {
+      bookedSlots = [];
+      return;
     }
-    return out;
+    slotsLoading = true;
+    try {
+      bookedSlots = await dataStore.getBookedSlots(date);
+    } catch (err) {
+      bookedSlots = [];
+      submitError = err instanceof DataError ? err.message : "No se pudo consultar la agenda";
+    } finally {
+      slotsLoading = false;
+    }
   }
 
-  const slots = buildSlots();
-
-  // Deterministic pseudo-availability so the demo behaves like a real agenda and
-  // stays stable between renders (no backend in the mono-store build).
   function isUnavailable(slot: string): boolean {
-    if (!date) return false;
-    let hash = 0;
-    const key = `${date}T${slot}`;
-    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) % 1000;
-    return hash % 5 === 0;
+    return bookedSlots.includes(slot);
   }
 
   let depositCents = $derived(selected ? calcDepositCents(selected.priceCents) : 0);
@@ -66,12 +66,34 @@
   function selectService(service: PiercingService) {
     selected = service;
     time = "";
+    submitError = "";
     revealForm();
   }
 
-  function submit(event: SubmitEvent) {
+  async function submit(event: SubmitEvent) {
     event.preventDefault();
-    if (!selected || !formValid) return;
+    if (!selected || !formValid || submitting) return;
+    submitting = true;
+    submitError = "";
+    try {
+      // Persist FIRST, then open WhatsApp (FR-006).
+      await dataStore.createBooking({
+        clientName: clientName.trim(),
+        clientWhatsapp: clientWhatsapp.trim(),
+        serviceId: selected.id,
+        serviceName: selected.name,
+        priceCents: selected.priceCents,
+        date,
+        timeSlot: time,
+        notes: notes.trim() || undefined,
+      });
+    } catch (err) {
+      submitError =
+        err instanceof DataError ? err.message : "No se pudo registrar la cita. Intentalo de nuevo.";
+      submitting = false;
+      return;
+    }
+    submitting = false;
     const link = buildBookingWhatsAppLink({
       phone: WHATSAPP_PHONE,
       service: selected,
@@ -142,26 +164,30 @@
 
     <label class="field">
       <span>Fecha</span>
-      <input type="date" min={today} bind:value={date} onchange={() => { time = ""; }} />
+      <input type="date" min={today} bind:value={date} onchange={onDateChange} />
     </label>
 
     <fieldset class="slots" disabled={!date}>
       <legend>Horario disponible</legend>
       {#if date}
-        <div class="slot-grid">
-          {#each slots as slot (slot)}
-            <button
-              type="button"
-              class="slot"
-              class:active={time === slot}
-              disabled={isUnavailable(slot)}
-              aria-pressed={time === slot}
-              onclick={() => { time = slot; }}
-            >
-              {slot}
-            </button>
-          {/each}
-        </div>
+        {#if slotsLoading}
+          <p class="hint" aria-live="polite">Consultando disponibilidad…</p>
+        {:else}
+          <div class="slot-grid">
+            {#each slots as slot (slot)}
+              <button
+                type="button"
+                class="slot"
+                class:active={time === slot}
+                disabled={isUnavailable(slot)}
+                aria-pressed={time === slot}
+                onclick={() => { time = slot; }}
+              >
+                {slot}
+              </button>
+            {/each}
+          </div>
+        {/if}
       {:else}
         <p class="hint">Elegí una fecha para ver los horarios disponibles.</p>
       {/if}
@@ -205,9 +231,22 @@
           <span>Saldo en el local</span>
           <span class="amount amount-muted">{formatCents(balanceCents)}</span>
         </div>
+        <div class="deposit-payments">
+          <span class="pay-label">Datos para abonar la seña</span>
+          <span>
+            <strong>{PAYMENT_PAGO_MOVIL.label}:</strong> {PAYMENT_PAGO_MOVIL.ref}
+          </span>
+          <span>
+            <strong>{PAYMENT_BINANCE_PAY.label}:</strong> {PAYMENT_BINANCE_PAY.ref}
+          </span>
+        </div>
       </div>
 
-      <button type="submit" class="submit" disabled={!formValid}>
+      {#if submitError}
+        <p class="error" role="alert">{submitError}</p>
+      {/if}
+
+      <button type="submit" class="submit" disabled={!formValid || submitting}>
         Confirmar turno por WhatsApp
       </button>
       {#if !formValid}
@@ -461,6 +500,32 @@
 
   .amount-muted {
     color: var(--text-secondary);
+  }
+
+  .deposit-payments {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border-top: var(--border-card);
+    padding-top: 0.75rem;
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+  }
+
+  .pay-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .error {
+    color: var(--accent-negative);
+    font-size: 0.9rem;
+    text-align: center;
+    margin: 0 0 0.75rem;
   }
 
   .submit {

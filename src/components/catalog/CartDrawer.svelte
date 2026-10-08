@@ -13,8 +13,9 @@
     totalCents,
     updateQuantity,
   } from "../../stores/cart";
-  import { PAYMENT_METHODS, PRODUCTS, type PaymentMethod } from "../../lib/types/content";
+  import { PAYMENT_METHODS, type PaymentMethod } from "../../lib/types/content";
   import { WHATSAPP_PHONE } from "../../lib/config";
+  import { dataStore } from "../../lib/data/store";
 
   // The ONLY interactive island on the catalog page (client:load).
   let open = $state(false);
@@ -35,14 +36,21 @@
     });
   }
 
-  function onDocClick(event: MouseEvent) {
+  async function onDocClick(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
 
     const addBtn = target?.closest<HTMLElement>("[data-add-to-cart]");
     if (addBtn) {
       const id = addBtn.getAttribute("data-add-to-cart");
-      const product = PRODUCTS.find((p) => p.id === id);
-      if (product && product.stock > 0) addToCart(product);
+      if (!id) return;
+      try {
+        const products = await dataStore.listProducts({ includeUnpublished: false });
+        const product = products.find((record) => record.id === id);
+        if (product && product.stock > 0) addToCart(product);
+      } catch (err) {
+        // Keep the grid usable; a failing lookup must never throw to the user.
+        void err;
+      }
       return;
     }
 

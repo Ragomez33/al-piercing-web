@@ -1,13 +1,17 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { GALLERY_ITEMS, PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
-import { PIERCING_SERVICE_CATEGORIES, PIERCING_SERVICES } from "../lib/data/services";
+import { PIERCING_SERVICE_CATEGORIES } from "../lib/data/services";
+import { dataStore } from "../lib/data/store";
 import { formatCents } from "../lib/utils/money";
+
+// Services come from the data layer (FR-003); static in both modes.
+const services = await dataStore.listServices();
 
 // Group services by category for a Setmore-style menu.
 const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
   category,
-  services: PIERCING_SERVICES.filter((service) => service.category === category.id),
+  services: services.filter((service) => service.category === category.id),
 })).filter((group) => group.services.length > 0);
 ---
 
