@@ -47,7 +47,7 @@ interface ProductRow {
 
 interface TimeBlockRow {
   id: string;
-  date: string;
+  block_date: string;
   time_slot: string;
   duration_minutes: number;
   label: string;
@@ -60,7 +60,7 @@ function toTimeBlock(row: TimeBlockRow): TimeBlock {
   }
   return {
     id: row.id,
-    date: row.date,
+    date: row.block_date,
     timeSlot: row.time_slot,
     durationMinutes: duration,
     label: row.label,
@@ -200,8 +200,8 @@ export function createSupabaseAdapter(): DataStore {
 
     async listBlocks(input): Promise<TimeBlock[]> {
       const client = getSupabaseClient();
-      let query = client.from("time_blocks").select("*").order("date").order("time_slot");
-      if (input?.date) query = query.eq("date", input.date);
+      let query = client.from("time_blocks").select("*").order("block_date").order("time_slot");
+      if (input?.date) query = query.eq("block_date", input.date);
       const { data, error } = await query;
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => toTimeBlock(row as unknown as TimeBlockRow));
@@ -211,7 +211,7 @@ export function createSupabaseAdapter(): DataStore {
       const client = getSupabaseClient();
       const { data, error } = await client
         .from("time_blocks")
-        .insert({ date: input.date, time_slot: input.timeSlot, duration_minutes: input.durationMinutes, label: input.label })
+        .insert({ block_date: input.date, time_slot: input.timeSlot, duration_minutes: input.durationMinutes, label: input.label })
         .select()
         .single();
       if (error) throw new DataError(error.message);
@@ -238,7 +238,7 @@ export function createSupabaseAdapter(): DataStore {
 
     async getBlockedSlots(date: string): Promise<string[]> {
       const client = getSupabaseClient();
-      const { data, error } = await client.from("time_blocks").select("time_slot").eq("date", date);
+      const { data, error } = await client.from("time_blocks").select("time_slot").eq("block_date", date);
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => (row as unknown as { time_slot: string }).time_slot);
     },

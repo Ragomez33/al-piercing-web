@@ -6,7 +6,7 @@
 create table if not exists public.time_blocks (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  date date not null,
+  block_date date not null,
   time_slot text not null,
   duration_minutes integer not null check (duration_minutes in (15, 30, 60, 90, 120)),
   label text not null
