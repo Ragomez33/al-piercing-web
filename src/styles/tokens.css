@@ -1,0 +1,60 @@
+@import "open-props/style";
+
+:root {
+  /* Backgrounds & Structure (Charcoal Black & Industrial Gray) */
+  --bg-app-body: #111113;
+  --bg-card-light: #1A1A1E;
+  --bg-surface-elevated: #242429;
+  --bg-badge-pill: #202024;
+  --bg-pill-hover: #2A2A31;
+  --border-card: 1px solid #2E2E36;
+
+  /* Backlit Gold Accents (Neon Gold) */
+  --accent-primary: #E5A93C;
+  --accent-primary-hover: #F3B94F;
+  --accent-primary-glow: rgba(229, 169, 60, 0.25);
+  /* Text/icon color used on top of accent-filled surfaces (gold buttons). */
+  --accent-on: #111113;
+
+  /* Warm Wood Secondary */
+  --accent-wood: #B87A4B;
+  --bg-wood-pill: rgba(184, 122, 75, 0.15);
+
+  /* Status Indicators */
+  --accent-positive: #34D399;
+  --accent-negative: #F87171;
+  --accent-gold: #E5A93C;
+
+  /* Typography & Text */
+  --text-primary: #F4F4F5;
+  --text-secondary: #A1A1AA;
+  --text-muted: #71717A;
+  --text-gold: #E5A93C;
+
+  /* Decorative top gradient: warm gold sheen fading into charcoal. */
+  --bg-gradient-top-start: rgba(229, 169, 60, 0.14);
+  --bg-gradient-top-end: rgba(17, 17, 19, 0);
+
+  /* Modal / drawer backdrop (the only pure-dark overlay). */
+  --overlay-backdrop: rgba(0, 0, 0, 0.65);
+
+  /* Decorative ink-background sprite stops (consumed by InkBackgroundCanvas). */
+  --ink-blob-core: rgba(229, 169, 60, 0.10);
+  --ink-blob-accent: rgba(184, 122, 75, 0.12);
+  --ink-blob-transparent: rgba(229, 169, 60, 0);
+
+  /* Geometry & Elevation */
+  --radius-card: 16px;
+  --radius-pill: 9999px;
+  --radius-image: 14px;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 8px 24px var(--accent-primary-glow);
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-app-body);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+}

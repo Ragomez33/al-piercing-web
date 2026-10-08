@@ -1,0 +1,420 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { GALLERY_ITEMS, PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
+import { PIERCING_SERVICE_CATEGORIES, PIERCING_SERVICES } from "../lib/data/services";
+import { formatCents } from "../lib/utils/money";
+
+// Group services by category for a Setmore-style menu.
+const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
+  category,
+  services: PIERCING_SERVICES.filter((service) => service.category === category.id),
+})).filter((group) => group.services.length > 0);
+---
+
+<BaseLayout title="ALPIERCING — Training / Piercing Studio">
+  <!-- Hero: specialty, bio, location and dual CTA -->
+  <section class="hero">
+    <p class="hero-eyebrow">Piercing Studio &amp; Joyería Corporal</p>
+    <h1>Perforaciones profesionales &amp; joyería de titanio</h1>
+    <p class="bio">{STUDIO_PROFILE.bio}</p>
+    <p class="location">📍 {STUDIO_PROFILE.location}</p>
+    <div class="actions">
+      <a class="cta cta-primary" href="/booking">Reservar Turno (50% Seña)</a>
+      <a class="cta cta-secondary" href="/catalog">Ver Catálogo de Joyería</a>
+    </div>
+  </section>
+
+  <!-- Services: Setmore-style menu, each row starts the booking flow pre-selected -->
+  <section class="services" id="servicios" aria-labelledby="services-title">
+    <h2 id="services-title">Servicios</h2>
+    <p class="section-lead">Elegí tu perforación y reservá en segundos.</p>
+
+    {
+      serviceGroups.map((group) => (
+        <div class="service-group">
+          <h3 class="group-title">
+            {group.category.label}
+            <span class="group-desc">{group.category.description}</span>
+          </h3>
+          <ul class="service-list">
+            {group.services.map((service) => (
+              <li>
+                <a class="service-row" href={`/booking?service=${service.id}`}>
+                  <span class="service-main">
+                    <span class="service-name">{service.name}</span>
+                    <span class="service-desc">{service.description}</span>
+                    <span class="service-meta">
+                      ⏱ {service.durationMinutes} min
+                      {service.requiresDeposit && <span class="dot">·</span>}
+                      {service.requiresDeposit && "Requiere seña"}
+                    </span>
+                  </span>
+                  <span class="service-price">{formatCents(service.priceCents)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </section>
+
+  <!-- Gallery: featured piercings and jewelry -->
+  <section class="teaser" id="galeria" aria-labelledby="teaser-title">
+    <h2 id="teaser-title">Nuestro trabajo</h2>
+    <div class="gallery-grid">
+      {
+        GALLERY_ITEMS.map((item) => (
+          <article class="card gallery-card">
+            <img
+              src={item.image}
+              alt={item.alt}
+              loading="lazy"
+              data-fallback="/images/placeholder.svg"
+            />
+            {item.label && <span class="chip">{item.label}</span>}
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Process / trust block: 3 fixed-order steps -->
+  <section class="process" aria-labelledby="process-title">
+    <h2 id="process-title">¿Cómo trabajamos?</h2>
+    <div class="process-grid">
+      {
+        PROCESS_STEPS.map((step) => (
+          <article class="card process-card">
+            <span class="step-num">{step.order}</span>
+            <h3>{step.title}</h3>
+            <p>{step.description}</p>
+          </article>
+        ))
+      }
+    </div>
+    <a class="cta cta-primary book-link" href="/booking">Reservar mi turno</a>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding: clamp(3.5rem, 10vh, 6rem) 1.5rem 2.5rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .hero-eyebrow {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-primary);
+    background: var(--bg-badge-pill);
+    border-radius: var(--radius-pill);
+    padding: 0.35rem 0.9rem;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 6vw, 3.6rem);
+    line-height: 1.05;
+    color: var(--text-primary);
+  }
+
+  .bio {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    max-width: 560px;
+  }
+
+  .location {
+    margin: 0;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 50px;
+    padding: 0.8rem 1.6rem;
+    border-radius: var(--radius-pill);
+    font-weight: 700;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  .cta-primary {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .cta-primary:hover,
+  .cta-primary:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px var(--accent-primary-glow);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .cta-secondary {
+    background: var(--bg-badge-pill);
+    color: var(--text-primary);
+    border: var(--border-card);
+  }
+
+  .cta-secondary:hover,
+  .cta-secondary:focus-visible {
+    background: var(--bg-pill-hover);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .services {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem;
+  }
+
+  .services h2,
+  .teaser h2,
+  .process h2 {
+    text-align: center;
+    margin: 0 0 0.5rem;
+    font-size: 1.6rem;
+    color: var(--text-primary);
+  }
+
+  .section-lead {
+    text-align: center;
+    margin: 0 0 1.75rem;
+    color: var(--text-secondary);
+  }
+
+  .service-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .group-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-gold);
+  }
+
+  .group-desc {
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .service-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .service-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+    text-decoration: none;
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  }
+
+  .service-row:hover,
+  .service-row:focus-visible {
+    transform: translateY(-2px);
+    border-color: var(--accent-primary);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .service-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .service-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+  }
+
+  .service-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .service-meta {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .dot {
+    padding: 0 0.15rem;
+  }
+
+  .service-price {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .teaser,
+  .process {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem;
+  }
+
+  .teaser h2,
+  .process h2 {
+    margin-bottom: 1.5rem;
+  }
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .gallery-card {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+  }
+
+  .gallery-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .chip {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    background: var(--bg-badge-pill);
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: var(--radius-pill);
+  }
+
+  .process-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .process-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    font-weight: 700;
+    box-shadow: var(--shadow-glow);
+  }
+
+  .process-card h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--text-primary);
+  }
+
+  .process-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+
+  .book-link {
+    margin: 1.75rem auto 0;
+  }
+
+  .process {
+    text-align: center;
+  }
+
+  .process .process-grid {
+    text-align: left;
+  }
+
+  @media (min-width: 768px) {
+    .gallery-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .process-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 360px) {
+    .gallery-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

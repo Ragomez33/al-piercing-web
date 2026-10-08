@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1A1A1E"/>
+  <circle cx="300" cy="262" r="120" fill="none" stroke="#C9CDD3" stroke-width="32"/>
+  <circle cx="300" cy="262" r="120" fill="none" stroke="#71717A" stroke-width="4"/>
+  <circle cx="300" cy="382" r="18" fill="#C9CDD3"/>
+  <text x="300" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#F4F4F5">Argolla Plateada</text>
+</svg>

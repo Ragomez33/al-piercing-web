@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1A1A1E"/>
+  <path d="M210 200 A 110 110 0 0 0 390 200" fill="none" stroke="#E5A93C" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="210" cy="200" r="26" fill="#E5A93C"/>
+  <circle cx="390" cy="200" r="26" fill="#E5A93C"/>
+  <path d="M300 330 l18 40 44 4 -33 30 10 43 -39 -22 -39 22 10 -43 -33 -30 44 -4 z" fill="#F4F4F5" opacity="0.9"/>
+  <text x="300" y="545" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="800" letter-spacing="6" fill="#E5A93C">NAVEL</text>
+</svg>

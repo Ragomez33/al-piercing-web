@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1A1A1E"/>
+  <path d="M200 210 A 120 120 0 0 0 400 210" fill="none" stroke="#E5A93C" stroke-width="32" stroke-linecap="round"/>
+  <circle cx="200" cy="210" r="24" fill="#E5A93C"/>
+  <circle cx="400" cy="210" r="24" fill="#E5A93C"/>
+  <path d="M300 340 l20 44 48 5 -36 33 11 47 -43 -24 -43 24 11 -47 -36 -33 48 -5 z" fill="#F4F4F5"/>
+  <text x="300" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#F4F4F5">Navel Zirconia</text>
+</svg>

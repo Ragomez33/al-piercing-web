@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#242429"/>
+  <circle cx="300" cy="280" r="110" fill="none" stroke="#E5A93C" stroke-width="20"/>
+  <text x="300" y="500" text-anchor="middle" font-family="system-ui, sans-serif" font-size="30" font-weight="800" letter-spacing="4" fill="#E5A93C">ALPIERCING</text>
+</svg>

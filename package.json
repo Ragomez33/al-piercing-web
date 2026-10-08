@@ -1,0 +1,32 @@
+{
+  "name": "al-piercing-web",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/svelte": "^9.0.1",
+    "@types/three": "^0.186.0",
+    "astro": "^7.3.7",
+    "lucide-svelte": "^1.0.1",
+    "open-props": "^1.7.23",
+    "pocketbase": "^0.28.1",
+    "svelte": "^5.57.2",
+    "three": "^0.186.1",
+    "typescript": "^6.0.3"
+  },
+  "allowScripts": {
+    "esbuild": true
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10"
+  }
+}

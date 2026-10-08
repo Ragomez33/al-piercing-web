@@ -1,0 +1,115 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import CartDrawer from "../components/catalog/CartDrawer.svelte";
+import ProductCard from "../components/catalog/ProductCard.svelte";
+import { PRODUCTS, type ProductCategory } from "../lib/types/content";
+
+const CATEGORIES: ProductCategory[] = ["Argollas & Labrets", "Zirconia & Navel", "Aftercare"];
+---
+
+<BaseLayout title="Catálogo — ALPIERCING">
+  <section class="catalog">
+    <div class="catalog-head">
+      <h1>Catálogo</h1>
+      <p>Argollas y labrets de titanio, joyería con zirconia y kits de aftercare.</p>
+    </div>
+
+    <div class="filters" role="group" aria-label="Filtrar por categoría">
+      <button type="button" class="pill is-active" data-category="all" aria-pressed="true">
+        Todos
+      </button>
+      {
+        CATEGORIES.map((c) => (
+          <button type="button" class="pill" data-category={c} aria-pressed="false">
+            {c}
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="grid">
+      {PRODUCTS.map((p) => <ProductCard product={p} />)}
+    </div>
+
+    <CartDrawer client:load />
+  </section>
+</BaseLayout>
+
+<style>
+  .catalog {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem;
+  }
+
+  .catalog-head {
+    text-align: center;
+    margin-bottom: 1.25rem;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 2rem;
+    color: var(--text-primary);
+  }
+
+  .catalog-head p {
+    margin: 0.35rem 0 0;
+    color: var(--text-secondary);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .pill {
+    min-height: 44px;
+    padding: 0.5rem 1.1rem;
+    border-radius: var(--radius-pill);
+    border: var(--border-card);
+    background: var(--bg-badge-pill);
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pill.is-active {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .pill:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (max-width: 360px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<style is:global>
+  /* Toggled by the CartDrawer island (data-category filter), applied to static grid cards. */
+  .is-hidden {
+    display: none !important;
+  }
+</style>

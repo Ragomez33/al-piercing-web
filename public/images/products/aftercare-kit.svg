@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#1A1A1E"/>
+  <rect x="180" y="150" width="200" height="270" rx="30" fill="#242429" stroke="#E5A93C" stroke-width="4"/>
+  <rect x="205" y="330" width="150" height="62" rx="20" fill="#E5A93C"/>
+  <text x="280" y="370" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#111113">AFTERCARE</text>
+  <rect x="410" y="220" width="60" height="200" rx="24" fill="#B87A4B"/>
+  <text x="300" y="530" text-anchor="middle" font-family="system-ui, sans-serif" font-size="28" font-weight="700" fill="#F4F4F5">Kit Aftercare</text>
+</svg>

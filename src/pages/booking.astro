@@ -1,0 +1,35 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import BookingFlow from "../components/booking/BookingFlow.svelte";
+---
+
+<BaseLayout title="Reservar Turno — ALPIERCING">
+  <section class="booking-hero">
+    <h1>Reservar Turno</h1>
+    <p>Elegí el servicio, la fecha y la hora. Confirmás la seña del 50% por WhatsApp.</p>
+  </section>
+
+  <!-- The only interactive island on this page: service → slot → data → deposit. -->
+  <BookingFlow client:load />
+</BaseLayout>
+
+<style>
+  .booking-hero {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: clamp(2rem, 6vh, 3.5rem) 1.25rem 0.5rem;
+    text-align: center;
+  }
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    color: var(--text-primary);
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+</style>
