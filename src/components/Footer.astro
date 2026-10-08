@@ -63,7 +63,10 @@ const CURRENT_YEAR = new Date().getFullYear();
 <style>
   .footer {
     position: relative;
-    z-index: 2;
+    /* z-index 1: stays above the decorative canvas (0) but BELOW <main> content (2),
+       so fixed overlays/modals rendered inside <main> (e.g. the admin "Nuevo Producto"
+       modal) paint above the footer instead of being covered by it. */
+    z-index: 1;
     margin-top: 4rem;
     background: var(--bg-footer);
     border-top: 1px solid var(--divider-subtle);
