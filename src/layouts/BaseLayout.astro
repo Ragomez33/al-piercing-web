@@ -80,5 +80,8 @@ const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
   main {
     position: relative;
     z-index: 2;
+    /* Grow to fill the viewport so the global footer stays at the bottom. */
+    flex: 1 0 auto;
+    width: 100%;
   }
 </style>

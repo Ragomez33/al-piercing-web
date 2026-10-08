@@ -295,10 +295,12 @@
         <p class="hint" aria-live="polite">Cargando inventario…</p>
       {:else if productsError}
         <p class="error" role="alert">{productsError}</p>
-      {:else if products.length === 0}
-        <p class="empty">No hay productos en el catálogo.</p>
       {:else}
-        <ul class="rows rows-products">
+        <div class="inventory">
+          {#if products.length === 0}
+            <p class="empty-state">No hay productos en el catálogo.</p>
+          {:else}
+            <ul class="rows rows-products">
           {#each products as product (product.id)}
             <li class="row">
               <img
@@ -353,6 +355,8 @@
             </li>
           {/each}
         </ul>
+          {/if}
+        </div>
       {/if}
     {/if}
   </section>
@@ -475,7 +479,8 @@
     background: var(--bg-surface-elevated);
     border: var(--border-card);
     border-radius: var(--radius-image);
-    padding: 0.7rem 0.85rem;
+    /* Matches the booking form inputs (feature 008 a11y/symmetry). */
+    padding: 0.75rem 0.9rem;
     min-height: 48px;
   }
 
@@ -584,6 +589,24 @@
     gap: 0.75rem;
     flex-wrap: wrap;
     margin-bottom: 1rem;
+  }
+
+  /* Inventory shell: keeps a fixed minimum height so the footer stays at the
+     bottom even when the catalog is empty or has few products. */
+  .inventory {
+    min-height: 50vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1.05rem;
   }
 
   .primary,
