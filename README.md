@@ -141,7 +141,7 @@ autodetectan Astro).
    (persistencia en `localStorage` del navegador).
 3. Para **Modo Producción** con Supabase:
    - Crear el proyecto en Supabase.
-   - Aplicar las migraciones (`supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
+   - Aplicar las migraciones (`npx supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
      `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado y `0006_team_members.sql`
      agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada).
    - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
