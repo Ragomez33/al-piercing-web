@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import LandingV2Services from "../components/landing/LandingV2Services.svelte";
 import LandingV2Sidebar from "../components/landing/LandingV2Sidebar.svelte";
+import LandingV2Reviews from "../components/landing/LandingV2Reviews.svelte";
 import LandingGallery from "../components/landing/LandingGallery.svelte";
 import TeamSection from "../components/team/TeamSection.svelte";
 import { BOOKING_POLICY, STUDIO_PROFILE } from "../lib/types/content";
@@ -67,7 +68,10 @@ const ANCHORS = [
           <LandingGallery client:load />
         </section>
 
-        <!-- 6. Address / Contact -->
+        <!-- 6. Reviews (Setmore-style main section) -->
+        <LandingV2Reviews />
+
+        <!-- 7. Address / Contact -->
         <section class="block" id="direccion" aria-labelledby="address-title">
           <h2 id="address-title">Dirección</h2>
           <p class="address">📍 {STUDIO_PROFILE.location}</p>

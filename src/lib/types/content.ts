@@ -35,6 +35,8 @@ export interface Review {
   /** Unique within the static list. */
   id: string;
   author: string;
+  /** Display date of the testimonial (e.g. "Enero 2026"). */
+  date: string;
   text: string;
   /** Optional 0–5 score. */
   rating?: number;
@@ -59,29 +61,41 @@ export const STUDIO_PROFILE: StudioProfile = {
   location: "El Tigre, Anzoátegui",
 };
 
-/** Aggregate rating used by the sticky sidebar and the reviews block (feature 015). */
+/** Aggregate rating used by the reviews section (feature 015). */
 export const STUDIO_RATING: StudioRating = {
   value: 4.9,
   count: 128,
 };
+
+/** Score distribution for the visual bars (5★→1★), must add up to `STUDIO_RATING.count`. */
+export const STUDIO_RATING_DISTRIBUTION: { stars: number; count: number }[] = [
+  { stars: 5, count: 112 },
+  { stars: 4, count: 13 },
+  { stars: 3, count: 2 },
+  { stars: 2, count: 1 },
+  { stars: 1, count: 0 },
+];
 
 /** Curated testimonials shown on the alternative landing (feature 015). */
 export const STUDIO_REVIEWS: Review[] = [
   {
     id: "review-1",
     author: "Valeria M.",
+    date: "Marzo 2026",
     text: "Excelente atención y mucha higiene. Me explicaron cada paso y la joya de titanio quedó perfecta.",
     rating: 5,
   },
   {
     id: "review-2",
     author: "Andrés R.",
+    date: "Febrero 2026",
     text: "El mejor estudio de la zona. Reservé online en dos minutos y me atendieron justo a la hora.",
     rating: 5,
   },
   {
     id: "review-3",
     author: "Gabriela S.",
+    date: "Enero 2026",
     text: "Muy profesionales y cuidadosos con el aftercare. Volvería sin dudarlo.",
     rating: 5,
   },

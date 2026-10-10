@@ -301,14 +301,20 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   (Instagram + WhatsApp live there, not in the summary card). Sections use `scroll-margin-top` so anchors
   clear the sticky header.
 - **Desktop grid**: a `minmax(0,1fr)` content column + a `340px` **sticky card** (`position: sticky`)
-  showing the logo/wordmark, a **live** open/closed label ("Abierto • Cierra a las HH:MM" via
-  `src/lib/utils/hours.ts` + `DEFAULT_BUSINESS_HOURS`), the address (El Tigre, Anzoátegui), the rating and
-  curated reviews (`STUDIO_RATING` / `STUDIO_REVIEWS`, `id="resenas"`) and a gold **"Reservar mi cita"**
-  CTA. Below `768px` the grid collapses to one column.
+  showing only the logo/wordmark, a **live** open/closed label ("Abierto • Cierra a las HH:MM" via
+  `src/lib/utils/hours.ts` + `DEFAULT_BUSINESS_HOURS`), the address (El Tigre, Anzoátegui) and a gold
+  **"Reservar mi cita"** CTA. Below `768px` the grid collapses to one column. The card holds **no**
+  reviews/rating — they live in the main flow (Setmore-style).
+- **Reviews section** (`LandingV2Reviews.svelte`, static SSR, no island): a full `#resenas` section in
+  the left column between Galería and Dirección showing the aggregate score (4.9 · 128 reseñas), the
+  **score distribution bars** (5★→1★, `STUDIO_RATING_DISTRIBUTION`) and the detailed testimonials with
+  author, **date** (`Review.date`) and text (`STUDIO_REVIEWS`). The anchor bar "Reseñas" smooth-scrolls
+  exactly to this section.
 - **Islands**: `LandingV2Services.svelte` (`client:load`) — a grouped `<details>` accordion with duration,
   price, a wood **"Requiere adelanto"** badge and `/booking?service=<id>` actions — and
-  `LandingV2Sidebar.svelte` (`client:load`) — the sticky card; `TeamSection.svelte` (`client:visible`)
-  fills the team section and `LandingGallery.svelte` (`client:load`) the gallery mosaic.
+  `LandingV2Sidebar.svelte` (`client:load`) — the slim sticky card (identity, live status, address, CTA);
+  `TeamSection.svelte` (`client:visible`) fills the team section, `LandingGallery.svelte` (`client:load`)
+  the gallery mosaic, and `LandingV2Reviews.svelte` renders the static reviews section (no hydration).
 - **Live data**: services and team subscribe to `subscribeToDataChanges(...)`
   (`src/lib/data/realtime.ts`; the `dataStore` wrapper in `store.ts` publishes after successful
   mutations) and refresh **in place** without a skeleton or scroll jump. Demo transport =
