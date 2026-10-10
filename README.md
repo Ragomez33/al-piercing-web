@@ -7,9 +7,9 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | Ruta | Módulo | Descripción |
 | --- | --- | --- |
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (desde los datos gestionados) |
-| `/landing-v2` | Landing alternativa | Variante minimalista estilo Setmore (perfil compacto + pestañas Servicios / Equipo / Proceso & Galería). Reutiliza la misma capa de datos y `/` queda intacta, para comparar ambas |
+| `/landing-v2` | Landing alternativa | Variante Setmore de **scroll continuo**: barra de anclas + grid de 2 columnas con **tarjeta lateral sticky** (horario en vivo, valoración, "Reservar mi cita"). Reutiliza la misma capa de datos y sincroniza servicios/equipo en vivo; `/` queda intacta para comparar |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
-| `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
+| `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → adelanto 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
 | `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) |
 
 ## Datos (capa híbrida)
@@ -36,12 +36,13 @@ src/
 ├── components/
 │   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario + servicios + equipo)
 │   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil)
-│   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + seña
+│   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + adelanto
 │   ├── canvas/InkBackgroundCanvas.svelte
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
 │   ├── catalog/ProductCard.svelte
 │   ├── catalog/CartDrawer.svelte
-│   ├── landing/LandingV2Tabs.svelte  # Island de pestañas de /landing-v2 (client:load)
+│   ├── landing/LandingV2Services.svelte # Acordeón de servicios de /landing-v2 (client:load)
+│   ├── landing/LandingV2Sidebar.svelte  # Tarjeta sticky con horario en vivo (client:load)
 │   ├── team/TeamSection.svelte       # Island de la sección "Nuestro Equipo" (client:visible)
 │   ├── SEO.astro                     # Metadata <head> reutilizable (OG/Twitter/canonical/robots)
 │   └── ui/{AppHeader.astro,MobileNav.svelte}  # Header público + drawer hamburguesa (client:load)
@@ -50,12 +51,13 @@ src/
 │   ├── config.ts                     # WhatsApp, pagos y constantes SEO (env-overridable)
 │   ├── seo.ts                        # URL del sitio, defaults y builder JSON-LD LocalBusiness
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
+│   ├── data/realtime.ts              # Pub/sub de cambios (BroadcastChannel / Supabase Realtime)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
 │   ├── data/team.ts                  # Seed TEAM_MEMBERS del equipo (UUIDs)
 │   ├── services/{booking,storage}.ts # Dominio (reservas) + subida de imágenes (producto/avatar)
 │   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/DataStore
-│   └── utils/{money,booking,dates,calendar}.ts
+│   └── utils/{money,booking,dates,calendar,hours}.ts
 ├── pages/{index,landing-v2,catalog,booking,admin}.astro
 ├── pages/robots.txt.ts               # robots.txt generado (Sitemap absoluto desde SITE)
 ├── stores/cart.ts

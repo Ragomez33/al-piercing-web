@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { dataStore, listFallbackTeamMembers } from "../../lib/data/store";
+  import { subscribeToDataChanges } from "../../lib/data/realtime";
   import type { TeamMember } from "../../lib/types/domain";
 
   const PLACEHOLDER = "/images/placeholder.svg";
@@ -13,6 +14,16 @@
     const img = event.currentTarget as HTMLImageElement;
     if (img.getAttribute("src") === PLACEHOLDER) return;
     img.src = PLACEHOLDER;
+  }
+
+  // Live refresh: re-fetch in place without the loading skeleton (no teardown/scroll jump).
+  async function refreshMembers() {
+    try {
+      members = await dataStore.listTeamMembers();
+      notice = "";
+    } catch {
+      // Keep the last known content on a transient read failure.
+    }
   }
 
   onMount(() => {
@@ -34,8 +45,19 @@
         if (active) loading = false;
       }
     })();
+
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToDataChanges(["team"], () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        if (active) void refreshMembers();
+      }, 150);
+    });
+
     return () => {
       active = false;
+      if (debounce) clearTimeout(debounce);
+      unsubscribe();
     };
   });
 </script>

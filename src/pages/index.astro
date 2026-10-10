@@ -26,7 +26,7 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
 
 <BaseLayout
   title="ALPIERCING — Training / Piercing Studio"
-  description="Piercing profesional y joyería de titanio en CDMX: menú de servicios, galería de trabajos, equipo de artistas y reserva de turno con seña online."
+  description="Piercing profesional y joyería de titanio en El Tigre, Anzoátegui: menú de servicios, galería de trabajos, equipo de artistas y reserva de cita con adelanto online."
 >
   <!-- Hero: specialty, bio, location and dual CTA -->
   <section class="hero">
@@ -35,7 +35,7 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
     <p class="bio">{STUDIO_PROFILE.bio}</p>
     <p class="location">📍 {STUDIO_PROFILE.location}</p>
     <div class="actions">
-      <a class="cta cta-primary" href="/booking">Reservar Turno (50% Seña)</a>
+      <a class="cta cta-primary" href="/booking">Reservar mi cita</a>
       <a class="cta cta-secondary" href="/catalog">Ver Catálogo de Joyería</a>
     </div>
   </section>
@@ -62,7 +62,7 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
                     <span class="service-meta">
                       ⏱ {service.durationMinutes} min
                       {service.requiresDeposit && <span class="dot">·</span>}
-                      {service.requiresDeposit && "Requiere seña"}
+                      {service.requiresDeposit && "Requiere adelanto"}
                     </span>
                   </span>
                   <span class="service-price">{formatCents(service.priceCents)}</span>
@@ -109,7 +109,7 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
         ))
       }
     </div>
-    <a class="cta cta-primary book-link" href="/booking">Reservar mi turno</a>
+    <a class="cta cta-primary book-link" href="/booking">Reservar mi cita</a>
   </section>
 
   <!-- Team: active artists/staff from the managed data source (feature 012, US1) -->

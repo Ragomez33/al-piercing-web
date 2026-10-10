@@ -31,7 +31,7 @@ export function buildBookingConfirmationLink(booking: Booking, phone: string): s
   if (!/^[0-9]+$/.test(phone)) return null;
 
   const lines = [
-    `¡Hola ${booking.clientName}! Confirmamos tu turno en ALPIERCING:`,
+    `¡Hola ${booking.clientName}! Confirmamos tu cita en ALPIERCING:`,
     "",
     `Servicio: ${booking.serviceName}`,
     `Fecha: ${booking.date}`,

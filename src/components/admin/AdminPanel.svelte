@@ -71,6 +71,7 @@
   // Products state (catalog tab)
   let products = $state<ProductRecord[]>([]);
   let productsLoading = $state(false);
+  let productsLoaded = $state(false);
   let productsError = $state("");
   let stockDraft = $state<Record<string, number>>({});
   let saving = $state<Record<string, boolean>>({});
@@ -90,6 +91,7 @@
   // Services state (feature 011)
   let services = $state<PiercingService[]>([]);
   let servicesLoading = $state(false);
+  let servicesLoaded = $state(false);
   let servicesError = $state("");
   let svBusy = $state<Record<string, boolean>>({});
 
@@ -113,6 +115,7 @@
   // Team state (feature 012)
   let team = $state<TeamMember[]>([]);
   let teamLoading = $state(false);
+  let teamLoaded = $state(false);
   let teamError = $state("");
   let tmBusy = $state<Record<string, boolean>>({});
 
@@ -151,6 +154,7 @@
       servicesLoading = true;
       servicesError = "";
       services = await dataStore.listServices({ includeInactive: true });
+      servicesLoaded = true;
     } catch (err) {
       servicesError = err instanceof DataError ? err.message : "Error al cargar los servicios";
     } finally {
@@ -215,12 +219,13 @@
     serviceError = "";
     try {
       if (editingServiceId) {
-        await dataStore.updateService(editingServiceId, input);
+        const updated = await dataStore.updateService(editingServiceId, input);
+        services = services.map((item) => (item.id === updated.id ? updated : item));
       } else {
-        await dataStore.createService(input);
+        const created = await dataStore.createService(input);
+        services = [...services, created];
       }
       closeService();
-      await refreshServices();
     } catch (err) {
       serviceError = err instanceof DataError ? err.message : "No se pudo guardar el servicio";
     } finally {
@@ -232,8 +237,8 @@
     svBusy[service.id] = true;
     servicesError = "";
     try {
-      await dataStore.updateService(service.id, { active: !service.active });
-      await refreshServices();
+      const updated = await dataStore.updateService(service.id, { active: !service.active });
+      services = services.map((item) => (item.id === updated.id ? updated : item));
     } catch (err) {
       servicesError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
     } finally {
@@ -256,9 +261,10 @@
     deleting = true;
     deleteError = "";
     try {
-      await dataStore.deleteService(deletingService.id);
+      const id = deletingService.id;
+      await dataStore.deleteService(id);
+      services = services.filter((item) => item.id !== id);
       deletingService = null;
-      await refreshServices();
     } catch (err) {
       deleteError = err instanceof DataError ? err.message : "No se pudo eliminar el servicio";
     } finally {
@@ -271,6 +277,7 @@
       productsLoading = true;
       productsError = "";
       products = await dataStore.listProducts({ includeUnpublished: true });
+      productsLoaded = true;
     } catch (err) {
       productsError = err instanceof DataError ? err.message : "Error al cargar el inventario";
     } finally {
@@ -284,6 +291,7 @@
       teamLoading = true;
       teamError = "";
       team = await dataStore.listTeamMembers({ includeInactive: true });
+      teamLoaded = true;
     } catch (err) {
       teamError = err instanceof DataError ? err.message : "Error al cargar el equipo";
     } finally {
@@ -372,12 +380,13 @@
         instagramHandle: tmInstagram.trim(),
       };
       if (editingTeamId) {
-        await dataStore.updateTeamMember(editingTeamId, input);
+        const updated = await dataStore.updateTeamMember(editingTeamId, input);
+        team = team.map((item) => (item.id === updated.id ? updated : item));
       } else {
-        await dataStore.createTeamMember(input);
+        const created = await dataStore.createTeamMember(input);
+        team = [...team, created];
       }
       closeTeamModal();
-      await refreshTeam();
     } catch (err) {
       teamFormError = err instanceof DataError ? err.message : "No se pudo guardar el miembro";
     } finally {
@@ -390,8 +399,8 @@
     tmBusy[member.id] = true;
     teamError = "";
     try {
-      await dataStore.updateTeamMember(member.id, { isActive: !member.isActive });
-      await refreshTeam();
+      const updated = await dataStore.updateTeamMember(member.id, { isActive: !member.isActive });
+      team = team.map((item) => (item.id === updated.id ? updated : item));
     } catch (err) {
       teamError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
     } finally {
@@ -414,9 +423,10 @@
     deletingTeamBusy = true;
     teamDeleteError = "";
     try {
-      await dataStore.deleteTeamMember(deletingTeam.id);
+      const id = deletingTeam.id;
+      await dataStore.deleteTeamMember(id);
+      team = team.filter((item) => item.id !== id);
       deletingTeam = null;
-      await refreshTeam();
     } catch (err) {
       teamDeleteError = err instanceof DataError ? err.message : "No se pudo eliminar el miembro";
     } finally {
@@ -489,6 +499,9 @@
         products = [];
         services = [];
         team = [];
+        productsLoaded = false;
+        servicesLoaded = false;
+        teamLoaded = false;
       }
     });
   });
@@ -503,9 +516,9 @@
     if (next === undefined || !Number.isInteger(next) || next < 0) return;
     saving[product.id] = true;
     try {
-      await dataStore.updateProduct(product.id, { stock: next });
+      const updated = await dataStore.updateProduct(product.id, { stock: next });
+      products = products.map((item) => (item.id === updated.id ? updated : item));
       delete stockDraft[product.id];
-      await refreshCatalog();
     } catch (err) {
       productsError = err instanceof DataError ? err.message : "No se pudo guardar el stock";
     } finally {
@@ -516,8 +529,8 @@
   async function togglePublished(product: ProductRecord) {
     saving[product.id] = true;
     try {
-      await dataStore.updateProduct(product.id, { published: !product.published });
-      await refreshCatalog();
+      const updated = await dataStore.updateProduct(product.id, { published: !product.published });
+      products = products.map((item) => (item.id === updated.id ? updated : item));
     } catch (err) {
       productsError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
     } finally {
@@ -577,12 +590,12 @@
         uploadingImage = true;
         image = await uploadProductImage(imageFile);
       }
-      await dataStore.createProduct({ name, category: newCategory, priceCents, stock, image });
+      const created = await dataStore.createProduct({ name, category: newCategory, priceCents, stock, image });
+      products = [...products, created];
       closeCreate();
       newName = "";
       newPrice = "";
       newStock = "";
-      await refreshCatalog();
     } catch (err) {
       createError = err instanceof DataError ? err.message : "No se pudo crear el producto";
     } finally {
@@ -732,18 +745,21 @@
         </button>
       </div>
 
-      {#if productsLoading}
+      {#if productsLoading && !productsLoaded}
         <p class="hint" aria-live="polite">Cargando inventario…</p>
-      {:else if productsError}
+      {:else if productsError && !productsLoaded}
         <p class="error" role="alert">{productsError}</p>
       {:else}
         <div class="inventory">
+          {#if productsError}
+            <p class="error" role="alert">{productsError}</p>
+          {/if}
           {#if products.length === 0}
             <p class="empty-state">No hay productos en el catálogo.</p>
           {:else}
             <ul class="rows rows-products">
           {#each products as product (product.id)}
-            <li class="row">
+            <li class="row" class:busy={saving[product.id]} aria-busy={saving[product.id]}>
               <img
                 class="thumb"
                 src={product.image}
@@ -807,18 +823,21 @@
         </button>
       </div>
 
-      {#if teamLoading}
+      {#if teamLoading && !teamLoaded}
         <p class="hint" aria-live="polite">Cargando equipo…</p>
-      {:else if teamError}
+      {:else if teamError && !teamLoaded}
         <p class="error" role="alert">{teamError}</p>
       {:else}
         <div class="inventory">
+          {#if teamError}
+            <p class="error" role="alert">{teamError}</p>
+          {/if}
           {#if team.length === 0}
             <p class="empty-state">No hay miembros en el equipo.</p>
           {:else}
             <ul class="rows">
               {#each team as member (member.id)}
-                <li class="row">
+                <li class="row" class:busy={tmBusy[member.id]} aria-busy={tmBusy[member.id]}>
                   <img
                     class="avatar-thumb"
                     src={member.avatarUrl || "/images/placeholder.svg"}
@@ -872,18 +891,21 @@
         </button>
       </div>
 
-      {#if servicesLoading}
+      {#if servicesLoading && !servicesLoaded}
         <p class="hint" aria-live="polite">Cargando servicios…</p>
-      {:else if servicesError}
+      {:else if servicesError && !servicesLoaded}
         <p class="error" role="alert">{servicesError}</p>
       {:else}
         <div class="inventory">
+          {#if servicesError}
+            <p class="error" role="alert">{servicesError}</p>
+          {/if}
           {#if services.length === 0}
             <p class="empty-state">No hay servicios cargados.</p>
           {:else}
             <ul class="rows">
               {#each services as service (service.id)}
-                <li class="row">
+                <li class="row" class:busy={svBusy[service.id]} aria-busy={svBusy[service.id]}>
                   <div class="row-main">
                     <strong class="row-title">{service.name}</strong>
                     <span class="row-sub">{service.category} · {service.durationMinutes} min</span>
@@ -1015,7 +1037,7 @@
 
         <label class="checkbox-field">
           <input type="checkbox" bind:checked={svRequiresDeposit} />
-          <span>Requiere seña</span>
+          <span>Requiere adelanto</span>
         </label>
 
         {#if serviceError}
@@ -1493,6 +1515,11 @@
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
     flex-wrap: wrap;
+  }
+
+  /* Inline busy affordance while a mutation for the row is pending (feature 015). */
+  .row.busy {
+    opacity: 0.55;
   }
 
   .row-main {

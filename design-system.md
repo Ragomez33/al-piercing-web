@@ -15,9 +15,9 @@ the studio (admin). These are the only modules of the product (governance §1.1)
 | Module | Purpose | Route | Status |
 | --- | --- | --- | --- |
 | `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (datos gestionados) | `/` | Implemented |
-| `landing-v2` | Landing **alternativa** minimalista estilo Setmore: perfil compacto + pestañas internas **Servicios / Equipo / Proceso & Galería**. Coexiste con `/` (que no se modifica) reutilizando la misma capa de datos | `/landing-v2` | Implemented |
+| `landing-v2` | Landing **alternativa** estilo Setmore de **scroll continuo**: barra de anclas (Servicios · Equipo · Acerca de · Galería · Reseñas · Dirección) + grid de 2 columnas (contenido + tarjeta lateral sticky con horario en vivo, valoración y "Reservar mi cita"). Coexiste con `/` reutilizando la misma capa de datos | `/landing-v2` | Implemented |
 | `catalog` | Catálogo de argollas y labrets de titanio, joyería zirconia/navel y kits de aftercare con carrito flotante y checkout pre-llenado a WhatsApp | `/catalog` | Implemented |
-| `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de seña con salida a WhatsApp | `/booking` | Implemented |
+| `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de adelanto con salida a WhatsApp | `/booking` | Implemented |
 | `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grilla mensual de citas con badges/dots por día y detalle del día con Aprobar/Reagendar/Cancelar + bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) sobre la capa híbrida de datos | `/admin` | Implemented |
 
 > **History:** v1.x of this document described **Foundly POS** (a local-first point-of-sale app).
@@ -70,7 +70,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - `bg-wood-pill`: `rgba(184, 122, 75, 0.15)` — translucent wood pill used for secondary labels.
 
 ### Status Indicators
-- `accent-positive` (Confirmado / Seña recibida): `#34D399`.
+- `accent-positive` (Confirmado / Adelanto recibido): `#34D399`.
 - `accent-gold` (Pendiente por validar / stock bajo): `#E5A93C`.
 - `accent-negative` (Cancelado / agotado): `#F87171`.
 - **Booking status badges (feature 009)** — semantic aliases over the palette above; components
@@ -222,7 +222,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - **Typography rules:**
   - **Prices / figures** (CTAs and totals): `font-variant-numeric: tabular-nums`, weight `700`;
     values stored/rendered as integer cents.
-  - **Positive amount** (Confirmado / Seña recibida): `--accent-positive`.
+  - **Positive amount** (Confirmado / Adelanto recibido): `--accent-positive`.
   - **Negative amount** (Cancelado / no disponible): `--accent-negative`.
 
 ### Service Menu (Landing) — implemented
@@ -292,22 +292,30 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   wrapped bio (`overflow-wrap: anywhere`) and an Instagram link **only when** a handle exists
   (`--border-btn-secondary`, `--accent-primary` on hover). Tokens only; reduced motion honored.
 
-### Alternative Landing (`/landing-v2`) — implemented (feature 013)
-- A second, experimental landing page that mirrors the minimalist Setmore profile architecture in Dark
-  Luxury. The page shell (`src/pages/landing-v2.astro`) is static: a compact **profile card** with the
-  logo (`BRAND_LOGO`) + wordmark (`STUDIO_PROFILE.brand`), tagline, short bio, address + opening hours,
-  a gold **"Reservas Online 24/7"** pill and Instagram/WhatsApp links (footer social pattern, ≥44px).
-- The only interactive surface is `LandingV2Tabs.svelte` (`client:load`), an accessible tab widget
-  (`role="tablist"`/`tab`/`tabpanel`, roving `tabindex`, Arrow/Home/End, `aria-selected`, `?tab=` mirrored
-  to the URL) switching three panels:
-  - **Servicios** — grouped by the published categories (Nostril/Helix…), each card with duration, price
-    (`tabular-nums`), a wood **"Requiere seña"** badge and a `Reservar` button linking to
-    `/booking?service=<id>`.
-  - **Equipo** — reuses `TeamSection.svelte` as a child component (active members).
-  - **Proceso & Galería** — ordered `PROCESS_STEPS` with a `/booking` CTA and the `GALLERY_ITEMS` tiles
-    (2/4 columns, placeholder fallback).
-- Services load client-side via `dataStore.listServices()` (demo fallback + non-blocking notice); the
-  current `/` landing is untouched. Tokens only; `clamp()` spacing; no horizontal scroll 320–1920px.
+### Alternative Landing (`/landing-v2`) — implemented (features 013, 015)
+- A second landing page that mirrors the Setmore profile architecture in Dark Luxury as a **single
+  continuous scroll** (no tabs). The shell (`src/pages/landing-v2.astro`) is static: an anchor bar
+  (Servicios · Equipo · Acerca de · Galería · Reseñas · Dirección) with CSS smooth scrolling
+  (`scroll-behavior: smooth`, reset under `prefers-reduced-motion`), a booking-policy banner
+  (`BOOKING_POLICY`), About (`STUDIO_PROFILE.bio`), the gallery (`GALLERY_ITEMS`) and Address/Contact
+  (Instagram + WhatsApp live there, not in the summary card). Sections use `scroll-margin-top` so anchors
+  clear the sticky header.
+- **Desktop grid**: a `minmax(0,1fr)` content column + a `340px` **sticky card** (`position: sticky`)
+  showing the logo/wordmark, a **live** open/closed label ("Abierto • Cierra a las HH:MM" via
+  `src/lib/utils/hours.ts` + `DEFAULT_BUSINESS_HOURS`), the address (El Tigre, Anzoátegui), the rating and
+  curated reviews (`STUDIO_RATING` / `STUDIO_REVIEWS`, `id="resenas"`) and a gold **"Reservar mi cita"**
+  CTA. Below `768px` the grid collapses to one column.
+- **Islands**: `LandingV2Services.svelte` (`client:load`) — a grouped `<details>` accordion with duration,
+  price, a wood **"Requiere adelanto"** badge and `/booking?service=<id>` actions — and
+  `LandingV2Sidebar.svelte` (`client:load`) — the sticky card; `TeamSection.svelte` (`client:visible`)
+  fills the team section.
+- **Live data**: services and team subscribe to `subscribeToDataChanges(...)`
+  (`src/lib/data/realtime.ts`; the `dataStore` wrapper in `store.ts` publishes after successful
+  mutations) and refresh **in place** without a skeleton or scroll jump. Demo transport =
+  `BroadcastChannel` + `storage`; production = Supabase Realtime; a `visibilitychange` fallback refreshes
+  on tab focus.
+- Services load client-side via `dataStore.listServices()` (demo fallback + non-blocking notice). Tokens
+  only; `clamp()` spacing; no horizontal scroll 320–1920px.
 
 ### Monthly Admin Calendar (Desktop Grid + Mobile Day List) — implemented (feature 012)
 - **Desktop (≥768px)**: a 6×7 month grid (Monday start, `monthGrid`) under a `‹ [mes año] ›` pager with a
@@ -328,7 +336,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   (`Confirmado` / `Pendiente por validar` / `Cancelado`) and a receipt-validation detail.
 - Layout: icon box (`--bg-badge-pill` + `--accent-primary`) → title + subtitle (`--text-secondary`)
   → right-aligned status pill + `tabular-nums` figure.
-- Deposit line shows `Seña (50%)` plus the amount; the remaining `50%` appears as a muted `Saldo`.
+- Deposit line shows `Adelanto (50%)` plus the amount; the remaining `50%` appears as a muted `Saldo`.
 
 ### Cart Drawer (Catalog) — implemented
 - FAB (`64px`, `--accent-primary`, `box-shadow: var(--shadow-glow)`) with an item-count badge
@@ -347,7 +355,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   gallery route** — the gallery is a section on the landing page (`#galeria`).
 - **Admin:** reached only by typing `/admin`; it does not appear in the public nav.
 - Primary actions:
-  - Landing hero: **Reservar Turno (50% Seña)** → `/booking` and **Ver Catálogo de Joyería** →
+  - Landing hero: **Reservar mi cita** → `/booking` and **Ver Catálogo de Joyería** →
     `/catalog`.
   - Landing menu: each service deep-links to `/booking?service={id}`.
   - Catalog: floating cart FAB opens the drawer; checkout builds the WhatsApp order message.
@@ -365,8 +373,9 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 | `CartDrawer` | `client:load` | catalog | Owns all cart interactivity + checkout |
 | `BookingFlow` | `client:load` | booking | Owns service/date/slot/form/deposit flow |
 | `ProductCard` | *(none — SSR)* | catalog | Presentational; static grid |
-| `TeamSection` | `client:visible` | landing | Below-the-fold team section; hydrates on view to reflect admin edits |
-| `LandingV2Tabs` | `client:load` | landing-v2 | Above-the-fold tab navigation + service list for the alternative landing |
+| `TeamSection` | `client:visible` | landing, landing-v2 | Below-the-fold team section; hydrates on view and refreshes live on team changes |
+| `LandingV2Services` | `client:load` | landing-v2 | Above-the-fold service accordion + live refresh for the alternative landing |
+| `LandingV2Sidebar` | `client:load` | landing-v2 | Sticky summary card with the live open/closed status + "Reservar mi cita" |
 | `MobileNav` | `client:load` | public header | Above-the-fold interactive hamburger drawer |
 
 ---
@@ -374,13 +383,13 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 ## 6. Booking Lifecycle & Deposit Source of Truth
 
 ALPIERCING separates the **appointment request/envelope** from the **deposit money trace**,
-so the studio can always answer *"which slot is locked, and who paid the seña?"*:
+so the studio can always answer *"which slot is locked, and who paid the adelanto?"*:
 
 | Concept | Table | Role |
 | --- | --- | --- |
 | Service catalog | `services` | The fixed piercing menu (id, name, category, price cents, duration, deposit flag). |
 | Appointment envelope | `appointments` | The booked service: client, service, slot date/time, status and the 50% deposit expectation. |
-| Deposit money trace | `deposit_payments` | Every unit of money received as seña (Binance Pay / Pago Móvil) plus its receipt reference. |
+| Deposit money trace | `deposit_payments` | Every unit of money received as adelanto (Binance Pay / Pago Móvil) plus its receipt reference. |
 | Request intake | `booking_requests` | Pre-confirmation intake captured by the flow (service, requested slot, client data) before the studio approves. |
 
 > **Current state:** this feature ships **without a backend**. The service catalog is static

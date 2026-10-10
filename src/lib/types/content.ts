@@ -28,6 +28,30 @@ export interface ProcessStep {
   description: string;
 }
 
+/** Aggregate rating shown as social proof on the landing pages (feature 015). */
+export interface StudioRating {
+  /** Average score, 0–5 (one decimal allowed). */
+  value: number;
+  /** Number of reviews; integer ≥ 0. */
+  count: number;
+}
+
+/** A curated testimonial (feature 015). No authoring workflow — static content only. */
+export interface Review {
+  /** Unique within the static list. */
+  id: string;
+  author: string;
+  text: string;
+  /** Optional 0–5 score. */
+  rating?: number;
+}
+
+/** Booking-policy / advisory copy rendered as the landing banner (feature 015). */
+export interface BookingPolicy {
+  title: string;
+  body: string;
+}
+
 export const NAV_ITEMS: NavigationItem[] = [
   { label: "Inicio", href: "/" },
   { label: "Catálogo", href: "/catalog" },
@@ -38,7 +62,41 @@ export const STUDIO_PROFILE: StudioProfile = {
   brand: "ALPIERCING",
   tagline: "TRAINING / PIERCING STUDIO",
   bio: "Estudio de perforaciones y joyería corporal. Trabajamos con titanio ASTM F-136 grado implante, técnica estéril y asesoría de joyería premium para cada anatomía.",
-  location: "Ciudad de México, CDMX",
+  location: "El Tigre, Anzoátegui",
+};
+
+/** Aggregate rating used by the sticky sidebar and the reviews block (feature 015). */
+export const STUDIO_RATING: StudioRating = {
+  value: 4.9,
+  count: 128,
+};
+
+/** Curated testimonials shown on the alternative landing (feature 015). */
+export const STUDIO_REVIEWS: Review[] = [
+  {
+    id: "review-1",
+    author: "Valeria M.",
+    text: "Excelente atención y mucha higiene. Me explicaron cada paso y la joya de titanio quedó perfecta.",
+    rating: 5,
+  },
+  {
+    id: "review-2",
+    author: "Andrés R.",
+    text: "El mejor estudio de la zona. Reservé online en dos minutos y me atendieron justo a la hora.",
+    rating: 5,
+  },
+  {
+    id: "review-3",
+    author: "Gabriela S.",
+    text: "Muy profesionales y cuidadosos con el aftercare. Volvería sin dudarlo.",
+    rating: 5,
+  },
+];
+
+/** Booking-policy notice rendered as the top banner on the alternative landing (feature 015). */
+export const BOOKING_POLICY: BookingPolicy = {
+  title: "Política de reservas",
+  body: "Las citas se confirman con un adelanto del 50% del valor del servicio. Llegá 10 minutos antes con tu documento de identidad. Los cambios o cancelaciones se gestionan con al menos 24 horas de anticipación.",
 };
 
 export const GALLERY_ITEMS: GalleryItem[] = [
@@ -72,8 +130,8 @@ export const PROCESS_STEPS: ProcessStep[] = [
   },
   {
     order: 2,
-    title: "Reserva con Seña (50%)",
-    description: "Seleccionás fecha y hora, y confirmás el turno abonando el 50% de la seña.",
+    title: "Reserva con Adelanto (50%)",
+    description: "Seleccionás fecha y hora, y confirmás la cita abonando el 50% del adelanto.",
   },
   {
     order: 3,

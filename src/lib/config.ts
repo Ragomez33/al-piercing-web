@@ -58,10 +58,10 @@ export interface BusinessAddress {
 
 export const BUSINESS_ADDRESS: BusinessAddress = {
   streetAddress: envString(import.meta.env.PUBLIC_BUSINESS_STREET, ""),
-  addressLocality: envString(import.meta.env.PUBLIC_BUSINESS_CITY, "Ciudad de México"),
-  addressRegion: envString(import.meta.env.PUBLIC_BUSINESS_REGION, "CDMX"),
+  addressLocality: envString(import.meta.env.PUBLIC_BUSINESS_CITY, "El Tigre"),
+  addressRegion: envString(import.meta.env.PUBLIC_BUSINESS_REGION, "Anzoátegui"),
   postalCode: envString(import.meta.env.PUBLIC_BUSINESS_ZIP, ""),
-  addressCountry: envString(import.meta.env.PUBLIC_BUSINESS_COUNTRY, "MX"),
+  addressCountry: envString(import.meta.env.PUBLIC_BUSINESS_COUNTRY, "VE"),
 };
 
 export interface GeoCoordinates {

@@ -223,7 +223,7 @@
               <Clock size={14} aria-hidden="true" />
               {service.durationMinutes} min
               {#if service.requiresDeposit}
-                <span class="dot">·</span> Requiere seña
+                <span class="dot">·</span> Requiere adelanto
               {/if}
             </span>
           </span>
@@ -310,7 +310,7 @@
           <span class="amount">{formatCents(selected.priceCents)}</span>
         </div>
         <div class="deposit-row deposit-strong">
-          <span>Seña a abonar (50%)</span>
+          <span>Adelanto a abonar (50%)</span>
           <span class="amount">{formatCents(depositCents)}</span>
         </div>
         <div class="deposit-row">
@@ -318,7 +318,7 @@
           <span class="amount amount-muted">{formatCents(balanceCents)}</span>
         </div>
         <div class="deposit-payments">
-          <span class="pay-label">Datos para abonar la seña</span>
+          <span class="pay-label">Datos para abonar el adelanto</span>
           <span>
             <strong>{PAYMENT_PAGO_MOVIL.label}:</strong> {PAYMENT_PAGO_MOVIL.ref}
           </span>
@@ -333,7 +333,7 @@
       {/if}
 
       <button type="submit" class="submit" disabled={!formValid || submitting}>
-        {submitting ? "Procesando reserva…" : "Solicitar turno"}
+        {submitting ? "Procesando reserva…" : "Solicitar cita"}
       </button>
       {#if !formValid}
         <p class="hint">Completá nombre, WhatsApp, fecha y hora para continuar.</p>

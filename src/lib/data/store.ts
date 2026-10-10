@@ -7,6 +7,7 @@ import type { DataMode, DataStore, TeamMember } from "../types/domain";
 import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
+import { publishDataChange } from "./realtime";
 
 export { DataError } from "../types/domain";
 
@@ -18,9 +19,58 @@ export function resolveMode(): DataMode {
   return ready ? "production" : "demo";
 }
 
+/**
+ * Wraps an adapter so that successful mutations publish a change notification
+ * (feature 015). Throwing mutations publish nothing, so subscribers never react to
+ * a failed write. Components never publish directly (constitution: Data Access).
+ */
+function withChangeNotifications(adapter: DataStore): DataStore {
+  return {
+    ...adapter,
+    async createService(input) {
+      const record = await adapter.createService(input);
+      publishDataChange("services");
+      return record;
+    },
+    async updateService(id, patch) {
+      const record = await adapter.updateService(id, patch);
+      publishDataChange("services");
+      return record;
+    },
+    async deleteService(id) {
+      await adapter.deleteService(id);
+      publishDataChange("services");
+    },
+    async createProduct(input) {
+      const record = await adapter.createProduct(input);
+      publishDataChange("products");
+      return record;
+    },
+    async updateProduct(id, patch) {
+      const record = await adapter.updateProduct(id, patch);
+      publishDataChange("products");
+      return record;
+    },
+    async createTeamMember(input) {
+      const record = await adapter.createTeamMember(input);
+      publishDataChange("team");
+      return record;
+    },
+    async updateTeamMember(id, patch) {
+      const record = await adapter.updateTeamMember(id, patch);
+      publishDataChange("team");
+      return record;
+    },
+    async deleteTeamMember(id) {
+      await adapter.deleteTeamMember(id);
+      publishDataChange("team");
+    },
+  };
+}
+
 export function createDataStore(): DataStore {
   const adapter = resolveMode() === "production" ? createSupabaseAdapter() : createLocalAdapter();
-  return adapter;
+  return withChangeNotifications(adapter);
 }
 
 /** Shared singleton consumed by all pages/islands. */

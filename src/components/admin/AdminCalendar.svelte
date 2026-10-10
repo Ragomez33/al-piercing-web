@@ -441,7 +441,7 @@
       <dd>{selected.date} · {selected.timeSlot}</dd>
       <dt>Precio total</dt>
       <dd>{formatCents(selected.priceCents)}</dd>
-      <dt>Seña (50%)</dt>
+      <dt>Adelanto (50%)</dt>
       <dd class="gold">{formatCents(selected.depositCents)}</dd>
       <dt>Saldo en el local</dt>
       <dd>{formatCents(selected.priceCents - selected.depositCents)}</dd>
