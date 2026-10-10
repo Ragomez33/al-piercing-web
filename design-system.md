@@ -14,10 +14,11 @@ the studio (admin). These are the only modules of the product (governance §1.1)
 
 | Module | Purpose | Route | Status |
 | --- | --- | --- | --- |
-| `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos y bloque de proceso | `/` | Implemented |
+| `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (datos gestionados) | `/` | Implemented |
+| `landing-v2` | Landing **alternativa** minimalista estilo Setmore: perfil compacto + pestañas internas **Servicios / Equipo / Proceso & Galería**. Coexiste con `/` (que no se modifica) reutilizando la misma capa de datos | `/landing-v2` | Implemented |
 | `catalog` | Catálogo de argollas y labrets de titanio, joyería zirconia/navel y kits de aftercare con carrito flotante y checkout pre-llenado a WhatsApp | `/catalog` | Implemented |
 | `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de seña con salida a WhatsApp | `/booking` | Implemented |
-| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grid semanal de citas por duración, modal con Confirmar Seña/Reagendar/Cancelar, bloqueos de horario), **Inventario** (stock inline, publicar/ocultar, alta de productos) y **Servicios** (CRUD completo del menú: crear, editar, activar/desactivar y eliminar, con confirmación) sobre la capa híbrida de datos | `/admin` | Implemented |
+| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grilla mensual de citas con badges/dots por día y detalle del día con Aprobar/Reagendar/Cancelar + bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) sobre la capa híbrida de datos | `/admin` | Implemented |
 
 > **History:** v1.x of this document described **Foundly POS** (a local-first point-of-sale app).
 > v2.0.0 re-labeled it as *Tattoo Art* but kept a React Native/Gluestack description that never
@@ -171,13 +172,25 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - The authenticated dashboard is a two-region workspace: a **left sidebar** and a **main content area**
   (`flex: 1`, ample padding).
 - **Sidebar** (`position: sticky; top: 0; height: 100vh`, fixed width `256px`, right `--divider-subtle`
-  border) with "ALPIERCING Admin" at the top, a vertical **Calendario / Inventario / Servicios** nav (lucide icons,
-  refined hover, **gold active** state), and — at the bottom — the mode badge, the signed-in email and
-  `Cerrar Sesión`.
+  border) with "ALPIERCING Admin" at the top, a vertical **Calendario / Inventario / Servicios / Equipo**
+  nav (lucide icons, refined hover, **gold active** state), and — at the bottom — the mode badge, the
+  signed-in email and `Cerrar Sesión`.
+- **Calendario** (feature 012, replaces the weekly time-matrix): a **monthly grid** on desktop (Monday
+  start, 42 cells, per-day appointment count badge + pending/confirmed/cancelled status dots) with a
+  `‹ mes año ›` pager, a `[Hoy]` shortcut and a **day detail** listing the selected day's appointments
+  and blocks (see §4 *Monthly Admin Calendar*). Below `768px` it switches to a horizontal day selector
+  plus a vertical appointment list.
 - **Servicios** (feature 011): full CRUD of the managed piercing menu — list with category, price,
   duration and an active toggle, a create/edit modal and a destructive **Eliminar** action behind a
   confirmation dialog. Money is shown in cents via `formatCents`; deactivated services stay listed but
   disappear from the public menu.
+- **Equipo** (feature 012): CRUD of the studio roster — list with a round avatar thumbnail, name, role
+  and an active toggle (inactive rows show an "Inactivo" chip), a create/edit modal
+  (**Nombre**/**Rol** required, **Bio**, **Instagram**, **Avatar** file picker with live preview) and a
+  destructive **Eliminar** confirmation (`role="alertdialog"`). Avatars upload through
+  `src/lib/services/storage.ts` (`uploadImage(file, { prefix: "team-" })`); validation and adapter
+  errors surface in a `role="alert"` and the list refreshes after every successful mutation (no
+  optimistic edits).
 - **Small screens (<768px)**: the sidebar becomes an off-canvas drawer toggled by an accessible button
   (`aria-expanded`/`aria-controls`), with a backdrop, focus management and `Escape` to close; the main
   content is not pushed off-screen.
@@ -261,6 +274,47 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - Category label pill (`--bg-badge-pill`) overlaid bottom-left. Images use `data-fallback` so a
   missing asset degrades to the placeholder without breaking the grid.
 
+### Team Section (Landing) — implemented (feature 012)
+- `TeamSection.svelte` (island `client:visible`, below the fold) renders the studio's **active** team
+  members sourced from the managed data layer (`dataStore.listTeamMembers()`); on a read failure it falls
+  back to the demo seed with a non-blocking `role="status"` notice and renders **nothing** when the roster
+  is empty.
+- Responsive card grid: 1 column at 320px → 2 from `600px` → 3 from `900px`; each card shows a square
+  avatar (`--round`, placeholder via `/images/placeholder.svg`), name, role (`--text-gold`, uppercase),
+  wrapped bio (`overflow-wrap: anywhere`) and an Instagram link **only when** a handle exists
+  (`--border-btn-secondary`, `--accent-primary` on hover). Tokens only; reduced motion honored.
+
+### Alternative Landing (`/landing-v2`) — implemented (feature 013)
+- A second, experimental landing page that mirrors the minimalist Setmore profile architecture in Dark
+  Luxury. The page shell (`src/pages/landing-v2.astro`) is static: a compact **profile card** with the
+  logo (`BRAND_LOGO`) + wordmark (`STUDIO_PROFILE.brand`), tagline, short bio, address + opening hours,
+  a gold **"Reservas Online 24/7"** pill and Instagram/WhatsApp links (footer social pattern, ≥44px).
+- The only interactive surface is `LandingV2Tabs.svelte` (`client:load`), an accessible tab widget
+  (`role="tablist"`/`tab`/`tabpanel`, roving `tabindex`, Arrow/Home/End, `aria-selected`, `?tab=` mirrored
+  to the URL) switching three panels:
+  - **Servicios** — grouped by the published categories (Nostril/Helix…), each card with duration, price
+    (`tabular-nums`), a wood **"Requiere seña"** badge and a `Reservar` button linking to
+    `/booking?service=<id>`.
+  - **Equipo** — reuses `TeamSection.svelte` as a child component (active members).
+  - **Proceso & Galería** — ordered `PROCESS_STEPS` with a `/booking` CTA and the `GALLERY_ITEMS` tiles
+    (2/4 columns, placeholder fallback).
+- Services load client-side via `dataStore.listServices()` (demo fallback + non-blocking notice); the
+  current `/` landing is untouched. Tokens only; `clamp()` spacing; no horizontal scroll 320–1920px.
+
+### Monthly Admin Calendar (Desktop Grid + Mobile Day List) — implemented (feature 012)
+- **Desktop (≥768px)**: a 6×7 month grid (Monday start, `monthGrid`) under a `‹ [mes año] ›` pager with a
+  `[Hoy]` shortcut. Each in-month cell is a button showing the day number, a **count badge**
+  (`--accent-primary` / `--accent-on`, hidden at 0) and up to three **status dots**
+  (`--accent-gold` pendiente · `--accent-positive` confirmado · `--accent-negative` cancelado). The
+  selected day uses the gold border + `--shadow-glow`; today is tinted `--bg-gold-faint`; out-of-month
+  cells are muted and non-actionable. Cells use `aria-current="date"` and a labelled date + count.
+- **Mobile (<768px)**: the grid is replaced by a horizontally scrollable **day strip**
+  (`overflow-x: auto`; the page never scrolls horizontally) plus the same **vertical day list**.
+- **Day detail (both)**: chronological appointments (`HH:mm`, client, service name, duration, status
+  badge, notes) and time blocks (dashed `--accent-wood` card); clicking an appointment opens the booking
+  detail modal (Aprobar / Reagendar / Cancelar — transitions still go through `services/booking.ts`), and
+  `[Nuevo bloqueo]` opens a slot + label + duration modal (`createBlock`/`deleteBlock`).
+
 ### Appointment Rows (Admin) — planned
 - One-line compact rows per appointment: client, service, date/time, deposit status badge
   (`Confirmado` / `Pendiente por validar` / `Cancelado`) and a receipt-validation detail.
@@ -289,6 +343,12 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
     `/catalog`.
   - Landing menu: each service deep-links to `/booking?service={id}`.
   - Catalog: floating cart FAB opens the drawer; checkout builds the WhatsApp order message.
+- **Mobile drawer (feature 012)**: below `768px` the desktop pill nav is hidden and `MobileNav.svelte`
+  (island `client:load`) renders a hamburger that opens an off-canvas panel with the `NAV_ITEMS` links.
+  It locks body scroll and moves focus into the panel on open; closes on link selection, `Escape` or the
+  backdrop (restoring focus to the toggle); the active link is derived from `window.location.pathname`.
+  Tokens only (`--overlay-backdrop`, `--z-overlay`/`--z-modal`, `--bg-navbar-glass`, `--blur-navbar`,
+  `--shadow-glow`); targets ≥44px; reduced motion honored.
 
 ### Islands & `client:` directives (justification)
 | Island | Directive | Module | Justification |
@@ -297,6 +357,9 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 | `CartDrawer` | `client:load` | catalog | Owns all cart interactivity + checkout |
 | `BookingFlow` | `client:load` | booking | Owns service/date/slot/form/deposit flow |
 | `ProductCard` | *(none — SSR)* | catalog | Presentational; static grid |
+| `TeamSection` | `client:visible` | landing | Below-the-fold team section; hydrates on view to reflect admin edits |
+| `LandingV2Tabs` | `client:load` | landing-v2 | Above-the-fold tab navigation + service list for the alternative landing |
+| `MobileNav` | `client:load` | public header | Above-the-fold interactive hamburger drawer |
 
 ---
 

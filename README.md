@@ -6,22 +6,25 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 
 | Ruta | Módulo | Descripción |
 | --- | --- | --- |
-| `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos y bloque de proceso |
+| `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (desde los datos gestionados) |
+| `/landing-v2` | Landing alternativa | Variante minimalista estilo Setmore (perfil compacto + pestañas Servicios / Equipo / Proceso & Galería). Reutiliza la misma capa de datos y `/` queda intacta, para comparar ambas |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → seña 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
-| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** semanal (citas por bloque con badges de estado, aprobar/cancelar/reagendar, bloques de horario), **Inventario** (stock inline, publicar/ocultar, alta de productos) y **Servicios** (CRUD completo del menú: crear, editar, activar/desactivar y eliminar) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) |
 
 ## Datos (capa híbrida)
 
 Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
-  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1` / `alpi:services:v1`) sembrado con el contenido estático.
+  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1` / `alpi:services:v1` /
+  `alpi:team:v1`) sembrado con el contenido estático.
 - **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
-  `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios).
-- Los servicios son datos gestionados: el frontend (`BookingFlow`, landing, `AdminCalendar`) los lee con
-  `dataStore.listServices()` (nunca importa la lista hardcodeada); si la consulta falla, cae al seed demo
-  servido por la capa de datos.
+  `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios +
+  `0006_team_members.sql` del equipo).
+- Los servicios y el equipo son datos gestionados: el frontend (`BookingFlow`, landing, `AdminCalendar`,
+  `TeamSection`) los lee con `dataStore.listServices()` / `dataStore.listTeamMembers()` (nunca importa las
+  listas hardcodeadas); si la consulta falla, cae al seed demo servido por la capa de datos.
 - Las transiciones de estado de las reservas pasan por el servicio de dominio
   `src/lib/services/booking.ts` (`submitBookingRequest` / `approveBooking` / `cancelBooking`); los
   componentes no llaman a Supabase directamente.
@@ -31,23 +34,25 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 ```text
 src/
 ├── components/
-│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario)
-│   ├── admin/AdminCalendar.svelte    # Calendario semanal (compuesto dentro del island)
+│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario + servicios + equipo)
+│   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil)
 │   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + seña
 │   ├── canvas/InkBackgroundCanvas.svelte
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
 │   ├── catalog/ProductCard.svelte
 │   ├── catalog/CartDrawer.svelte
-│   └── ui/AppHeader.astro
+│   ├── team/TeamSection.svelte       # Island de la sección "Nuestro Equipo" (client:visible)
+│   └── ui/{AppHeader.astro,MobileNav.svelte}  # Header público + drawer hamburguesa (client:load)
 ├── layouts/BaseLayout.astro
 ├── lib/
 │   ├── config.ts                     # WhatsApp y datos de pago (env-overridable)
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
-│   ├── services/booking.ts           # Servicio de dominio (persistir/aprobar/cancelar + links WhatsApp)
-│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/DataStore
-│   └── utils/{money,booking,dates}.ts
+│   ├── data/team.ts                  # Seed TEAM_MEMBERS del equipo (UUIDs)
+│   ├── services/{booking,storage}.ts # Dominio (reservas) + subida de imágenes (producto/avatar)
+│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/DataStore
+│   └── utils/{money,booking,dates,calendar}.ts
 ├── pages/{index,catalog,booking,admin}.astro
 ├── stores/cart.ts
 └── styles/tokens.css                # Única fuente de estilo (CSS Custom Properties)
@@ -108,6 +113,7 @@ autodetectan Astro).
 3. Para **Modo Producción** con Supabase:
    - Crear el proyecto en Supabase.
    - Aplicar las migraciones (`supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
-     `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado.
+     `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado y `0006_team_members.sql`
+     agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada).
    - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
 4. Build: `npm run build` (directorio de publicación: `dist`).
