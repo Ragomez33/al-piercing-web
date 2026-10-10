@@ -42,7 +42,7 @@ export const THEME_COLOR = "#111113";
 // --- SEO / structured data (feature 014) ---------------------------------
 
 /** Default social preview / structured-data image (absolute-ized at render time). */
-export const DEFAULT_OG_IMAGE: string = BRAND_LOGO;
+export const DEFAULT_OG_IMAGE: string = "/og-image.jpg";
 
 /** Public Instagram profile (JSON-LD `sameAs`; mirrors the footer link). */
 export const INSTAGRAM_URL: string = "https://instagram.com/alpiercing";
