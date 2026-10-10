@@ -100,6 +100,32 @@ export interface NewTeamMemberInput {
   instagramHandle: string;
 }
 
+/** Managed public gallery photo (feature 016). */
+export interface GalleryItemRecord {
+  id: string;
+
+  /** Optional; defaults to ""; empty renders no caption. */
+  title: string;
+
+  /** Optional free-form text; defaults to "". */
+  category: string;
+
+  /** REQUIRED, non-empty image URL (upload via the storage service). */
+  imageUrl: string;
+
+  /** Public visibility; only active items are listed publicly. */
+  isActive: boolean;
+
+  createdAt: string;
+}
+
+/** Creation input — `id`/`createdAt` generated, `isActive` forced true by the data source. */
+export interface NewGalleryItemInput {
+  title?: string;
+  category?: string;
+  imageUrl: string;
+}
+
 /** Typed application error thrown by the data layer (never raw/unexpected values). */
 export class DataError extends Error {
   constructor(message: string) {
@@ -144,4 +170,9 @@ export interface DataStore {
     patch: Partial<NewTeamMemberInput> & { isActive?: boolean },
   ): Promise<TeamMember>;
   deleteTeamMember(id: string): Promise<void>;
+  /** Managed public gallery (feature 016). Public list returns only active photos. */
+  listGalleryItems(input?: { includeInactive?: boolean }): Promise<GalleryItemRecord[]>;
+  createGalleryItem(input: NewGalleryItemInput): Promise<GalleryItemRecord>;
+  toggleGalleryItemActive(id: string): Promise<GalleryItemRecord>;
+  deleteGalleryItem(id: string): Promise<void>;
 }

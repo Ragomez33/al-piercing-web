@@ -14,7 +14,7 @@
  */
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase-client";
 
-export type DataResource = "services" | "team" | "products";
+export type DataResource = "services" | "team" | "products" | "gallery";
 
 export interface DataChangeEvent {
   resource: DataResource;
@@ -33,7 +33,7 @@ interface Subscription {
 
 const CHANNEL_NAME = "alpi:data";
 const STORAGE_KEY = "alpi:data-change";
-const RESOURCES: readonly DataResource[] = ["services", "team", "products"];
+const RESOURCES: readonly DataResource[] = ["services", "team", "products", "gallery"];
 const ORIGIN = `alpi-${Math.random().toString(36).slice(2, 10)}`;
 
 const subscriptions = new Set<Subscription>();
@@ -109,6 +109,7 @@ function startRealtime(): void {
       .on("postgres_changes", { event: "*", schema: "public", table: "services" }, notify("services"))
       .on("postgres_changes", { event: "*", schema: "public", table: "team_members" }, notify("team"))
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, notify("products"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "gallery_items" }, notify("gallery"))
       .subscribe();
   } catch {
     // Realtime not available — the visibility fallback still refreshes on focus.

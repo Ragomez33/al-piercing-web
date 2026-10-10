@@ -201,6 +201,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      gallery_items: {
+        Row: {
+          id: string;
+          title: string;
+          category: string;
+          image_url: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title?: string;
+          category?: string;
+          image_url: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          category?: string;
+          image_url?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

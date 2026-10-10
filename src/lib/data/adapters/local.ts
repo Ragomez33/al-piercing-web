@@ -7,8 +7,10 @@ import {
   type Booking,
   type BookingStatus,
   type DataStore,
+  type GalleryItemRecord,
   type NewBlockInput,
   type NewBookingInput,
+  type NewGalleryItemInput,
   type NewProductInput,
   type NewTeamMemberInput,
   type ProductRecord,
@@ -18,6 +20,7 @@ import {
 } from "../../types/domain";
 import { PRODUCTS } from "../../types/content";
 import { calcDepositCents } from "../../utils/money";
+import { GALLERY_SEED } from "../gallery";
 import { PIERCING_SERVICES, type NewServiceInput, type PiercingService } from "../services";
 import { TEAM_MEMBERS } from "../team";
 
@@ -26,6 +29,7 @@ const PRODUCTS_KEY = "alpi:products:v1";
 const BLOCKS_KEY = "alpi:timeblocks:v1";
 const SERVICES_KEY = "alpi:services:v1";
 const TEAM_KEY = "alpi:team:v1";
+const GALLERY_KEY = "alpi:gallery:v1";
 
 function storage(): Storage {
   try {
@@ -53,6 +57,10 @@ function seedServices(): PiercingService[] {
 
 function seedTeamMembers(): TeamMember[] {
   return TEAM_MEMBERS.map((member) => ({ ...member }));
+}
+
+function seedGalleryItems(): GalleryItemRecord[] {
+  return GALLERY_SEED.map((item) => ({ ...item }));
 }
 
 const SERVICE_CATEGORIES = ["NOSTRIL", "HELIX", "NAVEL", "TITANIO"] as const;
@@ -140,6 +148,18 @@ function isTeamMember(value: unknown): value is TeamMember {
     typeof value.avatarUrl === "string" &&
     typeof value.bio === "string" &&
     typeof value.instagramHandle === "string" &&
+    typeof value.isActive === "boolean" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isGalleryItem(value: unknown): value is GalleryItemRecord {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.category === "string" &&
+    typeof value.imageUrl === "string" &&
     typeof value.isActive === "boolean" &&
     typeof value.createdAt === "string"
   );
@@ -414,6 +434,51 @@ export function createLocalAdapter(): DataStore {
       await writeArray(
         TEAM_KEY,
         members.filter((member) => member.id !== id),
+      );
+    },
+
+    // --- Public gallery (feature 016) ---
+    async listGalleryItems(input): Promise<GalleryItemRecord[]> {
+      const items = await readArray(GALLERY_KEY, seedGalleryItems(), isGalleryItem);
+      return input?.includeInactive ? items : items.filter((item) => item.isActive);
+    },
+
+    async createGalleryItem(input: NewGalleryItemInput): Promise<GalleryItemRecord> {
+      if (input.imageUrl.trim().length === 0) {
+        throw new DataError("La imagen es obligatoria");
+      }
+      const items = await readArray(GALLERY_KEY, seedGalleryItems(), isGalleryItem);
+      const record: GalleryItemRecord = {
+        id: newId(),
+        title: input.title?.trim() ?? "",
+        category: input.category?.trim() ?? "",
+        imageUrl: input.imageUrl.trim(),
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      await writeArray(GALLERY_KEY, [...items, record]);
+      return record;
+    },
+
+    async toggleGalleryItemActive(id: string): Promise<GalleryItemRecord> {
+      const items = await readArray(GALLERY_KEY, seedGalleryItems(), isGalleryItem);
+      let updated: GalleryItemRecord | undefined;
+      const next = items.map((item) =>
+        item.id === id ? ((updated = { ...item, isActive: !item.isActive }), updated) : item,
+      );
+      if (!updated) throw new DataError("Imagen no encontrada");
+      await writeArray(GALLERY_KEY, next);
+      return updated;
+    },
+
+    async deleteGalleryItem(id: string): Promise<void> {
+      const items = await readArray(GALLERY_KEY, seedGalleryItems(), isGalleryItem);
+      if (!items.some((item) => item.id === id)) {
+        throw new DataError("Imagen no encontrada");
+      }
+      await writeArray(
+        GALLERY_KEY,
+        items.filter((item) => item.id !== id),
       );
     },
   };

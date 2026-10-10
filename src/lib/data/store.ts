@@ -3,7 +3,7 @@
  * Selects the adapter once at module init based on the presence of public Supabase
  * environment variables; every module reads/writes through this facade.
  */
-import type { DataMode, DataStore, TeamMember } from "../types/domain";
+import type { DataMode, DataStore, GalleryItemRecord, TeamMember } from "../types/domain";
 import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
@@ -65,6 +65,20 @@ function withChangeNotifications(adapter: DataStore): DataStore {
       await adapter.deleteTeamMember(id);
       publishDataChange("team");
     },
+    async createGalleryItem(input) {
+      const record = await adapter.createGalleryItem(input);
+      publishDataChange("gallery");
+      return record;
+    },
+    async toggleGalleryItemActive(id) {
+      const record = await adapter.toggleGalleryItemActive(id);
+      publishDataChange("gallery");
+      return record;
+    },
+    async deleteGalleryItem(id) {
+      await adapter.deleteGalleryItem(id);
+      publishDataChange("gallery");
+    },
   };
 }
 
@@ -92,4 +106,13 @@ export async function listFallbackServices(): Promise<PiercingService[]> {
  */
 export async function listFallbackTeamMembers(): Promise<TeamMember[]> {
   return createLocalAdapter().listTeamMembers();
+}
+
+/**
+ * Demo-seed gallery items served by the local adapter. Used as a non-blocking
+ * fallback when a live `listGalleryItems()` read fails (feature 016); components
+ * never import the hardcoded seed directly.
+ */
+export async function listFallbackGalleryItems(): Promise<GalleryItemRecord[]> {
+  return createLocalAdapter().listGalleryItems();
 }

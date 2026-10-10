@@ -297,7 +297,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   continuous scroll** (no tabs). The shell (`src/pages/landing-v2.astro`) is static: an anchor bar
   (Servicios · Equipo · Acerca de · Galería · Reseñas · Dirección) with CSS smooth scrolling
   (`scroll-behavior: smooth`, reset under `prefers-reduced-motion`), a booking-policy banner
-  (`BOOKING_POLICY`), About (`STUDIO_PROFILE.bio`), the gallery (`GALLERY_ITEMS`) and Address/Contact
+  (`BOOKING_POLICY`), About (`STUDIO_PROFILE.bio`), the gallery (`LandingGallery`, feature 016) and Address/Contact
   (Instagram + WhatsApp live there, not in the summary card). Sections use `scroll-margin-top` so anchors
   clear the sticky header.
 - **Desktop grid**: a `minmax(0,1fr)` content column + a `340px` **sticky card** (`position: sticky`)
@@ -308,7 +308,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - **Islands**: `LandingV2Services.svelte` (`client:load`) — a grouped `<details>` accordion with duration,
   price, a wood **"Requiere adelanto"** badge and `/booking?service=<id>` actions — and
   `LandingV2Sidebar.svelte` (`client:load`) — the sticky card; `TeamSection.svelte` (`client:visible`)
-  fills the team section.
+  fills the team section and `LandingGallery.svelte` (`client:load`) the gallery mosaic.
 - **Live data**: services and team subscribe to `subscribeToDataChanges(...)`
   (`src/lib/data/realtime.ts`; the `dataStore` wrapper in `store.ts` publishes after successful
   mutations) and refresh **in place** without a skeleton or scroll jump. Demo transport =
@@ -316,6 +316,21 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   on tab focus.
 - Services load client-side via `dataStore.listServices()` (demo fallback + non-blocking notice). Tokens
   only; `clamp()` spacing; no horizontal scroll 320–1920px.
+
+### Gallery Module («Nuestro Trabajo») — implemented (feature 016)
+- **Data**: `GalleryItemRecord` (`id, title, category, imageUrl, isActive, createdAt`) via `dataStore`
+  (`listGalleryItems` / `createGalleryItem` / `toggleGalleryItemActive` / `deleteGalleryItem`); table
+  `gallery_items` (migration `0007_gallery.sql`) with RLS (public reads active rows; authenticated
+  manages all); demo seed from `src/lib/data/gallery.ts` (`alpi:gallery:v1`).
+- **Admin (`?tab=gallery`)**: responsive card grid with lazy square thumbnails, title (or "Sin título"),
+  category chip, "Oculta" state chip, activate/deactivate switch and confirmed delete; the "Nueva foto"
+  modal shows a live preview, optional title and a category `<datalist>`
+  (NOSTRIL / HELIX / NAVEL / TITANIO / Otro); uploads go through `uploadImage(file, { prefix: "gallery-" })`.
+  Mutations patch the grid in place (feature-015 pattern) — no flicker.
+- **Public**: `LandingGallery.svelte` (`client:load`) on both landings — CSS-columns mosaic (1/2/3/4 by
+  breakpoint), `loading="lazy"` thumbs, and an accessible lightbox (Esc / arrows / focus restore /
+  `aria-modal`, reduced-motion honored). It live-refreshes via `subscribeToDataChanges(["gallery"])`
+  without a manual reload.
 
 ### Monthly Admin Calendar (Desktop Grid + Mobile Day List) — implemented (feature 012)
 - **Desktop (≥768px)**: a 6×7 month grid (Monday start, `monthGrid`) under a `‹ [mes año] ›` pager with a
@@ -376,6 +391,7 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 | `TeamSection` | `client:visible` | landing, landing-v2 | Below-the-fold team section; hydrates on view and refreshes live on team changes |
 | `LandingV2Services` | `client:load` | landing-v2 | Above-the-fold service accordion + live refresh for the alternative landing |
 | `LandingV2Sidebar` | `client:load` | landing-v2 | Sticky summary card with the live open/closed status + "Reservar mi cita" |
+| `LandingGallery` | `client:load` | landing-v2, landing | Mosaic + lightbox for the managed gallery, live-refreshes via `subscribeToDataChanges(["gallery"])` |
 | `MobileNav` | `client:load` | public header | Above-the-fold interactive hamburger drawer |
 
 ---

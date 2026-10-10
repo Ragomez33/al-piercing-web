@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { CalendarDays, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
+  import { CalendarDays, Image, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -11,7 +11,7 @@
   import { isSupabaseConfigured } from "../../lib/data/supabase-client";
   import { BRAND_LOGO } from "../../lib/config";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
-  import type { NewTeamMemberInput, ProductRecord, TeamMember } from "../../lib/types/domain";
+  import type { GalleryItemRecord, NewTeamMemberInput, ProductRecord, TeamMember } from "../../lib/types/domain";
   import {
     PIERCING_SERVICE_CATEGORIES,
     type NewServiceInput,
@@ -22,7 +22,7 @@
   import { uploadImage, uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
 
-  type AdminTab = "calendar" | "catalog" | "services" | "team";
+  type AdminTab = "calendar" | "catalog" | "services" | "gallery" | "team";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -138,6 +138,27 @@
   let deletingTeamBusy = $state(false);
   let teamDeleteError = $state("");
 
+  // Gallery state (feature 016)
+  let gallery = $state<GalleryItemRecord[]>([]);
+  let galleryLoading = $state(false);
+  let galleryLoaded = $state(false);
+  let galleryError = $state("");
+  let gBusy = $state<Record<string, boolean>>({});
+
+  // Gallery upload modal
+  let showGallery = $state(false);
+  let gTitle = $state("");
+  let gCategory = $state("");
+  let gFile = $state<File | null>(null);
+  let gPreview = $state<string | null>(null);
+  let gUploading = $state(false);
+  let gCreateError = $state("");
+
+  // Gallery delete confirmation
+  let deletingGallery = $state<GalleryItemRecord | null>(null);
+  let gDeleteBusy = $state(false);
+  let gDeleteError = $state("");
+
   function switchTab(next: AdminTab) {
     tab = next;
     drawerOpen = false;
@@ -146,6 +167,7 @@
     window.history.replaceState({}, "", url);
     if (next === "catalog") void refreshCatalog();
     if (next === "services") void refreshServices();
+    if (next === "gallery") void refreshGallery();
     if (next === "team") void refreshTeam();
   }
 
@@ -434,6 +456,113 @@
     }
   }
 
+  // --- Gallery actions (feature 016) ---
+  async function refreshGallery() {
+    try {
+      galleryLoading = true;
+      galleryError = "";
+      gallery = await dataStore.listGalleryItems({ includeInactive: true });
+      galleryLoaded = true;
+    } catch (err) {
+      galleryError = err instanceof DataError ? err.message : "Error al cargar la galería";
+    } finally {
+      galleryLoading = false;
+    }
+  }
+
+  function openGalleryCreate() {
+    gCreateError = "";
+    gTitle = "";
+    gCategory = "";
+    gFile = null;
+    gPreview = null;
+    showGallery = true;
+  }
+
+  function closeGalleryModal() {
+    showGallery = false;
+    gCreateError = "";
+    if (gPreview) URL.revokeObjectURL(gPreview);
+    gPreview = null;
+    gFile = null;
+  }
+
+  function onGalleryFileChange(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (file && !file.type.startsWith("image/")) {
+      gCreateError = "El archivo debe ser una imagen";
+      gFile = null;
+      gPreview = null;
+      return;
+    }
+    gCreateError = "";
+    gFile = file;
+    gPreview = file ? URL.createObjectURL(file) : null;
+  }
+
+  async function submitGallery() {
+    if (!gFile) {
+      gCreateError = "Elegí una imagen para subir";
+      return;
+    }
+    gCreateError = "";
+    gUploading = true;
+    try {
+      const imageUrl = await uploadImage(gFile, { prefix: "gallery-" });
+      const created = await dataStore.createGalleryItem({
+        title: gTitle.trim(),
+        category: gCategory.trim(),
+        imageUrl,
+      });
+      gallery = [...gallery, created];
+      closeGalleryModal();
+    } catch (err) {
+      gCreateError = err instanceof DataError ? err.message : "No se pudo subir la foto";
+    } finally {
+      gUploading = false;
+    }
+  }
+
+  async function toggleGalleryActive(item: GalleryItemRecord) {
+    gBusy[item.id] = true;
+    galleryError = "";
+    try {
+      const updated = await dataStore.toggleGalleryItemActive(item.id);
+      gallery = gallery.map((entry) => (entry.id === updated.id ? updated : entry));
+    } catch (err) {
+      galleryError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
+    } finally {
+      gBusy[item.id] = false;
+    }
+  }
+
+  function askDeleteGallery(item: GalleryItemRecord) {
+    gDeleteError = "";
+    deletingGallery = item;
+  }
+
+  function cancelDeleteGallery() {
+    deletingGallery = null;
+    gDeleteError = "";
+  }
+
+  async function confirmDeleteGallery() {
+    if (!deletingGallery) return;
+    gDeleteBusy = true;
+    gDeleteError = "";
+    try {
+      const id = deletingGallery.id;
+      await dataStore.deleteGalleryItem(id);
+      gallery = gallery.filter((item) => item.id !== id);
+      deletingGallery = null;
+    } catch (err) {
+      gDeleteError = err instanceof DataError ? err.message : "No se pudo eliminar la foto";
+    } finally {
+      gDeleteBusy = false;
+    }
+  }
+
   // --- Auth gate (feature 005) ---
   async function submitLogin(event: SubmitEvent) {
     event.preventDefault();
@@ -486,8 +615,10 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "catalog") tab = "catalog";
     else if (params.get("tab") === "services") tab = "services";
+    else if (params.get("tab") === "gallery") tab = "gallery";
     else if (params.get("tab") === "team") tab = "team";
     if (status === "dashboard" && tab === "services") void refreshServices();
+    else if (status === "dashboard" && tab === "gallery") void refreshGallery();
     else if (status === "dashboard" && tab === "team") void refreshTeam();
     unsubscribeAuth = onAuthStateChange((sessionEmail) => {
       if (sessionEmail) {
@@ -499,9 +630,11 @@
         products = [];
         services = [];
         team = [];
+        gallery = [];
         productsLoaded = false;
         servicesLoaded = false;
         teamLoaded = false;
+        galleryLoaded = false;
       }
     });
   });
@@ -717,6 +850,15 @@
           <button
             type="button"
             class="side-link"
+            class:active={tab === "gallery"}
+            aria-current={tab === "gallery" ? "page" : undefined}
+            onclick={() => switchTab("gallery")}
+          >
+            <Image size={18} aria-hidden="true" /> Galería
+          </button>
+          <button
+            type="button"
+            class="side-link"
             class:active={tab === "team"}
             aria-current={tab === "team" ? "page" : undefined}
             onclick={() => switchTab("team")}
@@ -884,7 +1026,69 @@
           {/if}
         </div>
       {/if}
-    {:else}
+    {:else if tab === "gallery"}
+      <div class="toolbar">
+        <button type="button" class="primary" onclick={openGalleryCreate}>
+          <Plus size={18} aria-hidden="true" /> Nueva Foto
+        </button>
+      </div>
+
+      {#if galleryLoading && !galleryLoaded}
+        <p class="hint" aria-live="polite">Cargando galería…</p>
+      {:else if galleryError && !galleryLoaded}
+        <p class="error" role="alert">{galleryError}</p>
+      {:else}
+        <div class="gallery-panel">
+          {#if galleryError}
+            <p class="error" role="alert">{galleryError}</p>
+          {/if}
+          {#if gallery.length === 0}
+            <p class="empty-state">No hay fotos en la galería.</p>
+          {:else}
+            <ul class="gallery-grid">
+              {#each gallery as item (item.id)}
+                <li class="gallery-card" class:busy={gBusy[item.id]} aria-busy={gBusy[item.id]}>
+                  <img
+                    class="g-thumb"
+                    src={item.imageUrl}
+                    alt={item.title || "Foto de la galería"}
+                    loading="lazy"
+                    data-fallback="/images/placeholder.svg"
+                  />
+                  <div class="g-body">
+                    <strong class="row-title">{item.title || "Sin título"}</strong>
+                    {#if item.category}
+                      <span class="row-sub">{item.category}</span>
+                    {/if}
+                    <div class="publish">
+                      <span class="sr-label">Activa</span>
+                      <button
+                        type="button"
+                        class="toggle"
+                        class:on={item.isActive}
+                        role="switch"
+                        aria-checked={item.isActive}
+                        aria-label={`Activar o desactivar ${item.title || "foto"}`}
+                        disabled={gBusy[item.id]}
+                        onclick={() => void toggleGalleryActive(item)}
+                      >
+                        <span class="knob" aria-hidden="true"></span>
+                      </button>
+                      {#if !item.isActive}
+                        <span class="chip-hidden">Oculta</span>
+                      {/if}
+                    </div>
+                    <button type="button" class="danger small" onclick={() => askDeleteGallery(item)}>
+                      <Trash2 size={16} aria-hidden="true" /> Eliminar
+                    </button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+    {:else if tab === "services"}
       <div class="toolbar">
         <button type="button" class="primary" onclick={openCreateService}>
           <Plus size={18} aria-hidden="true" /> Nuevo Servicio
@@ -1153,6 +1357,89 @@
         <button type="button" class="ghost" onclick={cancelDeleteTeamMember} disabled={deletingTeamBusy}>Cancelar</button>
         <button type="button" class="danger" onclick={() => void confirmDeleteTeamMember()} disabled={deletingTeamBusy}>
           {deletingTeamBusy ? "Eliminando…" : "Eliminar"}
+        </button>
+      </div>
+    </section>
+  {/if}
+
+  {#if showGallery}
+    <div class="backdrop" onclick={closeGalleryModal} role="presentation"></div>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="gallery-title">
+      <header class="modal-head">
+        <h2 id="gallery-title">Nueva Foto</h2>
+        <button type="button" class="icon-btn" onclick={closeGalleryModal} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+
+      <form onsubmit={(e) => { e.preventDefault(); void submitGallery(); }}>
+        <label class="field" for="g-img">Imagen</label>
+        <input
+          class="input file-input"
+          id="g-img"
+          type="file"
+          accept="image/*"
+          onchange={onGalleryFileChange}
+        />
+        {#if gPreview}
+          <div class="image-preview">
+            <img src={gPreview} alt="Vista previa de la foto" />
+          </div>
+        {/if}
+
+        <label class="field" for="g-title">Título (opcional)</label>
+        <input class="input" id="g-title" type="text" bind:value={gTitle} placeholder="Ej: Helix con zirconia" />
+
+        <label class="field" for="g-category">Categoría</label>
+        <input
+          class="input"
+          id="g-category"
+          type="text"
+          list="gallery-categories"
+          bind:value={gCategory}
+          placeholder="Ej: HELIX"
+        />
+        <datalist id="gallery-categories">
+          <option value="NOSTRIL" />
+          <option value="HELIX" />
+          <option value="NAVEL" />
+          <option value="TITANIO" />
+          <option value="Otro" />
+        </datalist>
+
+        {#if gCreateError}
+          <p class="error" role="alert">{gCreateError}</p>
+        {/if}
+
+        <div class="modal-actions">
+          <button type="button" class="ghost" onclick={closeGalleryModal} disabled={gUploading}>Cancelar</button>
+          <button type="submit" class="primary" disabled={gUploading}>
+            {gUploading ? "Subiendo imagen…" : "Subir foto"}
+          </button>
+        </div>
+      </form>
+    </section>
+  {/if}
+
+  {#if deletingGallery}
+    <div class="backdrop" onclick={cancelDeleteGallery} role="presentation"></div>
+    <section class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-gallery-title">
+      <header class="modal-head">
+        <h2 id="delete-gallery-title">Eliminar foto</h2>
+        <button type="button" class="icon-btn" onclick={cancelDeleteGallery} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+      <p class="gate-hint">
+        ¿Eliminar <strong>{deletingGallery.title || "esta foto"}</strong>? Se quitará de la galería pública y del panel.
+      </p>
+      {#if gDeleteError}
+        <p class="error" role="alert">{gDeleteError}</p>
+      {/if}
+      <div class="modal-actions">
+        <button type="button" class="ghost" onclick={cancelDeleteGallery} disabled={gDeleteBusy}>Cancelar</button>
+        <button type="button" class="danger" onclick={() => void confirmDeleteGallery()} disabled={gDeleteBusy}>
+          {gDeleteBusy ? "Eliminando…" : "Eliminar"}
         </button>
       </div>
     </section>
@@ -1520,6 +1807,53 @@
   /* Inline busy affordance while a mutation for the row is pending (feature 015). */
   .row.busy {
     opacity: 0.55;
+  }
+
+  /* Gallery tab (feature 016). */
+  .gallery-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .gallery-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 1rem;
+  }
+
+  .gallery-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    min-width: 0;
+  }
+
+  .gallery-card.busy {
+    opacity: 0.55;
+  }
+
+  .g-thumb {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: var(--radius-image);
+    background: var(--bg-surface-elevated);
+  }
+
+  .g-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
   }
 
   .row-main {

@@ -6,11 +6,11 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 
 | Ruta | Módulo | Descripción |
 | --- | --- | --- |
-| `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (desde los datos gestionados) |
-| `/landing-v2` | Landing alternativa | Variante Setmore de **scroll continuo**: barra de anclas + grid de 2 columnas con **tarjeta lateral sticky** (horario en vivo, valoración, "Reservar mi cita"). Reutiliza la misma capa de datos y sincroniza servicios/equipo en vivo; `/` queda intacta para comparar |
+| `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), **galería gestionada "Nuestro trabajo"** (mosaico + lightbox, live-sync), bloque de proceso y sección **Nuestro Equipo / Artistas** (datos gestionados) |
+| `/landing-v2` | Landing alternativa | Variante Setmore de **scroll continuo**: barra de anclas + grid de 2 columnas con **tarjeta lateral sticky** (horario en vivo, valoración, "Reservar mi cita"). Reutiliza la misma capa de datos y sincroniza servicios/equipo/galería en vivo; `/` queda intacta para comparar |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
 | `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → adelanto 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
-| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) |
+| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD del menú), **Galería** (subir/activar/desactivar/eliminar fotos) y **Equipo** (CRUD del staff) |
 
 ## Datos (capa híbrida)
 
@@ -18,13 +18,14 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
   `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1` / `alpi:services:v1` /
-  `alpi:team:v1`) sembrado con el contenido estático.
+  `alpi:team:v1` / `alpi:gallery:v1`) sembrado con el contenido estático.
 - **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
   `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios +
-  `0006_team_members.sql` del equipo).
-- Los servicios y el equipo son datos gestionados: el frontend (`BookingFlow`, landing, `AdminCalendar`,
-  `TeamSection`) los lee con `dataStore.listServices()` / `dataStore.listTeamMembers()` (nunca importa las
-  listas hardcodeadas); si la consulta falla, cae al seed demo servido por la capa de datos.
+  `0006_team_members.sql` del equipo + `0007_gallery.sql` de la galería).
+- Los servicios, el equipo y la galería son datos gestionados: el frontend (`BookingFlow`, landings,
+  `AdminCalendar`, `TeamSection`, `LandingGallery`) los lee con `dataStore.listServices()` /
+  `dataStore.listTeamMembers()` / `dataStore.listGalleryItems()` (nunca importa listas hardcodeadas);
+  si la consulta falla, cae al seed demo servido por la capa de datos.
 - Las transiciones de estado de las reservas pasan por el servicio de dominio
   `src/lib/services/booking.ts` (`submitBookingRequest` / `approveBooking` / `cancelBooking`); los
   componentes no llaman a Supabase directamente.
@@ -34,7 +35,7 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 ```text
 src/
 ├── components/
-│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario + servicios + equipo)
+│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario + servicios + galería + equipo)
 │   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil)
 │   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + adelanto
 │   ├── canvas/InkBackgroundCanvas.svelte
@@ -43,6 +44,7 @@ src/
 │   ├── catalog/CartDrawer.svelte
 │   ├── landing/LandingV2Services.svelte # Acordeón de servicios de /landing-v2 (client:load)
 │   ├── landing/LandingV2Sidebar.svelte  # Tarjeta sticky con horario en vivo (client:load)
+│   ├── landing/LandingGallery.svelte    # Galería pública: mosaico + lightbox (client:load)
 │   ├── team/TeamSection.svelte       # Island de la sección "Nuestro Equipo" (client:visible)
 │   ├── SEO.astro                     # Metadata <head> reutilizable (OG/Twitter/canonical/robots)
 │   └── ui/{AppHeader.astro,MobileNav.svelte}  # Header público + drawer hamburguesa (client:load)
@@ -52,11 +54,12 @@ src/
 │   ├── seo.ts                        # URL del sitio, defaults y builder JSON-LD LocalBusiness
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/realtime.ts              # Pub/sub de cambios (BroadcastChannel / Supabase Realtime)
+│   ├── data/gallery.ts               # Seed GALLERY_SEED de la galería (demo)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
 │   ├── data/team.ts                  # Seed TEAM_MEMBERS del equipo (UUIDs)
 │   ├── services/{booking,storage}.ts # Dominio (reservas) + subida de imágenes (producto/avatar)
-│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/DataStore
+│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/GalleryItemRecord/DataStore
 │   └── utils/{money,booking,dates,calendar,hours}.ts
 ├── pages/{index,landing-v2,catalog,booking,admin}.astro
 ├── pages/robots.txt.ts               # robots.txt generado (Sitemap absoluto desde SITE)

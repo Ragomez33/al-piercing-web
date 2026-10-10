@@ -1,7 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import TeamSection from "../components/team/TeamSection.svelte";
-import { GALLERY_ITEMS, PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
+import LandingGallery from "../components/landing/LandingGallery.svelte";
+import { PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
 import { PIERCING_SERVICE_CATEGORIES } from "../lib/data/services";
 import { dataStore, listFallbackServices } from "../lib/data/store";
 import { formatCents } from "../lib/utils/money";
@@ -75,24 +76,10 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
     }
   </section>
 
-  <!-- Gallery: featured piercings and jewelry -->
+  <!-- Gallery: managed "Nuestro trabajo" photos (feature 016) -->
   <section class="teaser" id="galeria" aria-labelledby="teaser-title">
     <h2 id="teaser-title">Nuestro trabajo</h2>
-    <div class="gallery-grid">
-      {
-        GALLERY_ITEMS.map((item) => (
-          <article class="card gallery-card">
-            <img
-              src={item.image}
-              alt={item.alt}
-              loading="lazy"
-              data-fallback="/images/placeholder.svg"
-            />
-            {item.label && <span class="chip">{item.label}</span>}
-          </article>
-        ))
-      }
-    </div>
+    <LandingGallery client:load />
   </section>
 
   <!-- Process / trust block: 3 fixed-order steps -->
@@ -333,42 +320,11 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
     margin-bottom: 1.5rem;
   }
 
-  .gallery-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-
   .card {
     background: var(--bg-card-light);
     border: var(--border-card);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
-  }
-
-  .gallery-card {
-    position: relative;
-    overflow: hidden;
-    aspect-ratio: 1 / 1;
-  }
-
-  .gallery-card img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .chip {
-    position: absolute;
-    left: 0.75rem;
-    bottom: 0.75rem;
-    background: var(--bg-badge-pill);
-    color: var(--text-primary);
-    font-weight: 700;
-    font-size: 0.8rem;
-    padding: 0.3rem 0.8rem;
-    border-radius: var(--radius-pill);
   }
 
   .process-grid {
@@ -422,18 +378,8 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
   }
 
   @media (min-width: 768px) {
-    .gallery-grid {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
     .process-grid {
       grid-template-columns: repeat(3, 1fr);
-    }
-  }
-
-  @media (max-width: 360px) {
-    .gallery-grid {
-      grid-template-columns: 1fr;
     }
   }
 </style>

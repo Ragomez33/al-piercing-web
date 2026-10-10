@@ -2,8 +2,9 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import LandingV2Services from "../components/landing/LandingV2Services.svelte";
 import LandingV2Sidebar from "../components/landing/LandingV2Sidebar.svelte";
+import LandingGallery from "../components/landing/LandingGallery.svelte";
 import TeamSection from "../components/team/TeamSection.svelte";
-import { BOOKING_POLICY, GALLERY_ITEMS, STUDIO_PROFILE } from "../lib/types/content";
+import { BOOKING_POLICY, STUDIO_PROFILE } from "../lib/types/content";
 import { INSTAGRAM_URL, WHATSAPP_PHONE } from "../lib/config";
 
 // Static display label; the sidebar card computes the live open/closed status (feature 015).
@@ -60,24 +61,10 @@ const ANCHORS = [
           <p class="bio">{STUDIO_PROFILE.bio}</p>
         </section>
 
-        <!-- 5. Gallery -->
+        <!-- 5. Gallery (managed data + lightbox, feature 016) -->
         <section class="block" id="galeria" aria-labelledby="gallery-title">
           <h2 id="gallery-title">Galería</h2>
-          <div class="gallery">
-            {
-              GALLERY_ITEMS.map((item) => (
-                <figure class="tile">
-                  <img
-                    src={item.image}
-                    alt={item.alt}
-                    loading="lazy"
-                    data-fallback="/images/placeholder.svg"
-                  />
-                  {item.label && <figcaption>{item.label}</figcaption>}
-                </figure>
-              ))
-            }
-          </div>
+          <LandingGallery client:load />
         </section>
 
         <!-- 6. Address / Contact -->
@@ -215,41 +202,6 @@ const ANCHORS = [
     color: var(--text-secondary);
   }
 
-  .gallery {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-  }
-
-  .tile {
-    position: relative;
-    margin: 0;
-    aspect-ratio: 1 / 1;
-    overflow: hidden;
-    background: var(--bg-card-light);
-    border: var(--border-card);
-    border-radius: var(--radius-card);
-  }
-
-  .tile img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .tile figcaption {
-    position: absolute;
-    left: 0.75rem;
-    bottom: 0.75rem;
-    background: var(--bg-badge-pill);
-    color: var(--text-primary);
-    font-weight: 700;
-    font-size: 0.78rem;
-    padding: 0.25rem 0.7rem;
-    border-radius: var(--radius-pill);
-  }
-
   .address,
   .hours {
     margin: 0 0 0.35rem;
@@ -297,19 +249,9 @@ const ANCHORS = [
       grid-template-columns: minmax(0, 1fr) 340px;
     }
 
-    .gallery {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
     .side {
       position: sticky;
       top: 5rem;
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .gallery {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 

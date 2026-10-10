@@ -16,12 +16,6 @@ export interface StudioProfile {
   location: string;
 }
 
-export interface GalleryItem {
-  image: string; // asset reference
-  alt: string; // descriptive, REQUIRED
-  label?: string;
-}
-
 export interface ProcessStep {
   order: 1 | 2 | 3;
   title: string;
@@ -98,29 +92,6 @@ export const BOOKING_POLICY: BookingPolicy = {
   title: "Política de reservas",
   body: "Las citas se confirman con un adelanto del 50% del valor del servicio. Llegá 10 minutos antes con tu documento de identidad. Los cambios o cancelaciones se gestionan con al menos 24 horas de anticipación.",
 };
-
-export const GALLERY_ITEMS: GalleryItem[] = [
-  {
-    image: "/images/featured-1.svg",
-    alt: "Piercing de helix con joyería dorada de titanio",
-    label: "HELIX",
-  },
-  {
-    image: "/images/featured-2.svg",
-    alt: "Piercing de nostril con aro dorado",
-    label: "NOSTRIL",
-  },
-  {
-    image: "/images/featured-3.svg",
-    alt: "Navel ring con zirconia sobre titanio",
-    label: "NAVEL",
-  },
-  {
-    image: "/images/featured-4.svg",
-    alt: "Joyería premium de titanio ASTM F-136",
-    label: "TITANIO",
-  },
-];
 
 export const PROCESS_STEPS: ProcessStep[] = [
   {

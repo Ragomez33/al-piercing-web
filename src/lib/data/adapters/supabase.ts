@@ -10,8 +10,10 @@ import {
   type BookingStatus,
   type DataMode,
   type DataStore,
+  type GalleryItemRecord,
   type NewBlockInput,
   type NewBookingInput,
+  type NewGalleryItemInput,
   type NewProductInput,
   type NewTeamMemberInput,
   type ProductRecord,
@@ -29,6 +31,7 @@ type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type TimeBlockRow = Database["public"]["Tables"]["time_blocks"]["Row"];
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type TeamRow = Database["public"]["Tables"]["team_members"]["Row"];
+type GalleryRow = Database["public"]["Tables"]["gallery_items"]["Row"];
 
 function toTimeBlock(row: TimeBlockRow): TimeBlock {
   const duration = row.duration_minutes;
@@ -115,6 +118,17 @@ function toTeamMember(row: TeamRow): TeamMember {
     avatarUrl: row.avatar_url,
     bio: row.bio,
     instagramHandle: row.instagram_handle,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
+function toGalleryItem(row: GalleryRow): GalleryItemRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    imageUrl: row.image_url,
     isActive: row.is_active,
     createdAt: row.created_at,
   };
@@ -377,6 +391,62 @@ export function createSupabaseAdapter(): DataStore {
     async deleteTeamMember(id: string): Promise<void> {
       const client = getSupabaseClient();
       const { error } = await client.from("team_members").delete().eq("id", id);
+      if (error) throw new DataError(error.message);
+    },
+
+    // --- Public gallery (feature 016) ---
+    async listGalleryItems(input): Promise<GalleryItemRecord[]> {
+      const client = getSupabaseClient();
+      let query = client
+        .from("gallery_items")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (!input?.includeInactive) query = query.eq("is_active", true);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toGalleryItem(row));
+    },
+
+    async createGalleryItem(input: NewGalleryItemInput): Promise<GalleryItemRecord> {
+      if (input.imageUrl.trim().length === 0) {
+        throw new DataError("La imagen es obligatoria");
+      }
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("gallery_items")
+        .insert({
+          title: input.title?.trim() ?? "",
+          category: input.category?.trim() ?? "",
+          image_url: input.imageUrl.trim(),
+        })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toGalleryItem(requireRow(data, "La imagen"));
+    },
+
+    async toggleGalleryItemActive(id: string): Promise<GalleryItemRecord> {
+      const client = getSupabaseClient();
+      const current = await client
+        .from("gallery_items")
+        .select("is_active")
+        .eq("id", id)
+        .maybeSingle();
+      if (current.error) throw new DataError(current.error.message);
+      if (!current.data) throw new DataError("Imagen no encontrada");
+      const { data, error } = await client
+        .from("gallery_items")
+        .update({ is_active: !current.data.is_active })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toGalleryItem(requireRow(data, "La imagen"));
+    },
+
+    async deleteGalleryItem(id: string): Promise<void> {
+      const client = getSupabaseClient();
+      const { error } = await client.from("gallery_items").delete().eq("id", id);
       if (error) throw new DataError(error.message);
     },
   };
