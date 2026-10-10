@@ -1,10 +1,12 @@
 /**
  * Clean Supabase Database types for ALPIERCING.
  *
- * Mirrors the SQL applied to the Supabase project (migrations 0001–0005):
- *   - bookings    (booking_date, time_slot, …)
- *   - products    (category, price_cents, stock, published, …)
- *   - time_blocks (block_date, time_slot, duration_minutes, label)
+ * Mirrors the SQL applied to the Supabase project (migrations 0001–0006):
+ *   - bookings     (booking_date, time_slot, …)
+ *   - products     (category, price_cents, stock, published, …)
+ *   - time_blocks  (block_date, time_slot, duration_minutes, label)
+ *   - services     (category, price_cents, duration_minutes, active, …)
+ *   - team_members (name, role, avatar_url, bio, instagram_handle, is_active)
  *
  * Regenerate with the Supabase CLI once an access token is available:
  *   SUPABASE_ACCESS_TOKEN=... supabase gen types typescript --project-id <ref> > src/types/supabase.ts
@@ -162,6 +164,39 @@ export interface Database {
           duration_minutes?: number;
           requires_deposit?: boolean;
           active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      team_members: {
+        Row: {
+          id: string;
+          name: string;
+          role: string;
+          avatar_url: string;
+          bio: string;
+          instagram_handle: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          role: string;
+          avatar_url?: string;
+          bio?: string;
+          instagram_handle?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          role?: string;
+          avatar_url?: string;
+          bio?: string;
+          instagram_handle?: string;
+          is_active?: boolean;
           created_at?: string;
         };
         Relationships: [];

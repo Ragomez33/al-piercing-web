@@ -1,19 +1,29 @@
 /**
- * Calendar math & helpers for the admin calendar (feature 006).
- * Framework-agnostic so it stays unit-testable.
+ * Calendar math & helpers for the admin calendar (features 006 & 012).
+ * Framework-agnostic so it stays unit-testable: month-grid geometry, per-day
+ * status summaries and the slot-exclusivity helpers reused by reschedule/block
+ * validation.
  */
 import { localISODate } from "./dates";
 
 export const CALENDAR_START_MIN = 9 * 60; // 09:00
 export const CALENDAR_END_MIN = 19 * 60 + 30; // 19:30 (last bookable slot)
 export const ROW_MINUTES = 30;
-export const ROW_HEIGHT_PX = 40;
-export const PX_PER_MINUTE = ROW_HEIGHT_PX / ROW_MINUTES; // 1.333 px/min (80px per hour)
 
-export interface DayCell {
+/** A single cell of the monthly 6×7 grid (feature 012, MON-01). */
+export interface MonthDayCell {
   date: string; // local ISO yyyy-mm-dd
-  label: string; // "lun 12/10"
+  dayNumber: number; // 1–31
+  inMonth: boolean; // false for leading/trailing cells
   isToday: boolean;
+}
+
+/** Per-day appointment counts shown as badges/dots (feature 012, MON-02). */
+export interface DaySummary {
+  total: number; // non-cancelled appointments
+  pending: number;
+  confirmed: number;
+  cancelled: number;
 }
 
 export interface Occupancy {
@@ -24,10 +34,6 @@ export interface Occupancy {
 function minutesOf(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
-}
-
-export function formatTime(hhmm: string): string {
-  return hhmm;
 }
 
 /** Monday-start week containing the given date. */
@@ -46,22 +52,66 @@ export function addDays(date: Date, days: number): Date {
   return d;
 }
 
-export function weekDays(start: Date): DayCell[] {
+/** First day (00:00) of the month containing `date`. */
+export function startOfMonth(date: Date): Date {
+  const d = new Date(date);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Adds (or subtracts) whole months, keeping the day-of-month (clamped). */
+export function addMonths(date: Date, delta: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + delta);
+  return d;
+}
+
+/** Localized month heading, e.g. "octubre 2026". */
+export function monthLabel(date: Date): string {
+  return date.toLocaleDateString("es", { month: "long", year: "numeric" });
+}
+
+/**
+ * The monthly 6×7 grid for `monthStart`: exactly 42 Monday-start cells
+ * covering the month plus the leading/trailing days of the adjacent months.
+ */
+export function monthGrid(monthStart: Date): MonthDayCell[] {
+  const first = startOfMonth(monthStart);
+  const gridStart = startOfWeek(first);
+  const month = first.getMonth();
   const today = localISODate(new Date());
-  const out: DayCell[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(start, i);
+  const cells: MonthDayCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = addDays(gridStart, i);
     const date = localISODate(d);
-    out.push({
+    cells.push({
       date,
-      label: `${d.toLocaleDateString("es", { weekday: "short" })} ${d.toLocaleDateString("es", {
-        day: "2-digit",
-        month: "2-digit",
-      })}`,
+      dayNumber: d.getDate(),
+      inMonth: d.getMonth() === month,
       isToday: date === today,
     });
   }
-  return out;
+  return cells;
+}
+
+/**
+ * Appointment counts for one day. `total` is the non-cancelled count shown as
+ * the day badge; `pending`/`confirmed`/`cancelled` drive the status dots.
+ */
+export function dayStatusSummary(
+  bookings: { date: string; status: string }[],
+  date: string,
+): DaySummary {
+  const summary: DaySummary = { total: 0, pending: 0, confirmed: 0, cancelled: 0 };
+  for (const booking of bookings) {
+    if (booking.date !== date) continue;
+    if (booking.status === "PENDING") summary.pending += 1;
+    else if (booking.status === "CONFIRMED") summary.confirmed += 1;
+    else if (booking.status === "CANCELLED") summary.cancelled += 1;
+    if (booking.status !== "CANCELLED") summary.total += 1;
+  }
+  return summary;
 }
 
 /** All start times in the calendar window, one per row. */
@@ -71,22 +121,6 @@ export function calendarRows(): string[] {
     rows.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
   }
   return rows;
-}
-
-/** CSS `top` in px for an appointment/block starting at `time`. */
-export function topForTime(time: string): number {
-  return (minutesOf(time) - CALENDAR_START_MIN) * PX_PER_MINUTE;
-}
-
-/** CSS `height` in px for an appointment/block of `minutes`. */
-export function heightForMinutes(minutes: number): number {
-  return minutes * PX_PER_MINUTE;
-}
-
-/** Snaps a click Y offset (px, relative to a day column) to a row start time. */
-export function timeAtOffsetY(offsetY: number): string {
-  const index = Math.max(0, Math.min(calendarRows().length - 1, Math.floor(offsetY / ROW_HEIGHT_PX)));
-  return calendarRows()[index];
 }
 
 /** True when [start, start+duration) overlaps any occupancy interval. */

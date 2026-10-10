@@ -369,7 +369,7 @@
   .booking {
     max-width: 760px;
     margin: 0 auto;
-    padding: 2rem 1.25rem 0;
+    padding: clamp(1.5rem, 5vw, 2rem) clamp(1rem, 4vw, 1.25rem) 0;
   }
 
   h2 {
@@ -443,6 +443,7 @@
     font-weight: 700;
     font-size: 1.05rem;
     color: var(--text-primary);
+    overflow-wrap: anywhere;
   }
 
   .chip {
@@ -489,11 +490,20 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    flex-wrap: wrap;
     padding: 1rem 1.15rem;
     margin-bottom: 1.5rem;
     background: var(--bg-surface-elevated);
     border: var(--border-card);
     border-radius: var(--radius-card);
+  }
+
+  .selected-summary > div {
+    min-width: 0;
+  }
+
+  .selected-summary strong {
+    overflow-wrap: anywhere;
   }
 
   .summary-label {
@@ -523,7 +533,7 @@
 
   .slot-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
     gap: 0.5rem;
   }
 
@@ -576,8 +586,15 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
     color: var(--text-secondary);
     font-size: 0.95rem;
+  }
+
+  .deposit-row span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .deposit-strong {
@@ -625,6 +642,7 @@
   }
 
   .submit {
+    width: 100%;
     min-height: 52px;
     border-radius: var(--radius-btn);
     border: none;

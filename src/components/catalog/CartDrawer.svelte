@@ -322,6 +322,7 @@
     bottom: 0;
     z-index: 42;
     width: min(420px, 100%);
+    max-width: 100vw;
     background: var(--bg-card-light);
     border-left: var(--border-card);
     display: flex;
@@ -333,7 +334,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.25rem;
+    padding: clamp(1rem, 4vw, 1.25rem);
     border-bottom: var(--border-card);
   }
 
@@ -366,7 +367,7 @@
   .drawer-inner {
     flex: 1;
     overflow-y: auto;
-    padding: 1.25rem;
+    padding: clamp(1rem, 4vw, 1.25rem);
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -390,12 +391,13 @@
 
   .line {
     display: grid;
-    grid-template-columns: 56px 1fr auto;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem;
     border: var(--border-card);
     border-radius: var(--radius-card);
+    min-width: 0;
   }
 
   .line img {
@@ -417,6 +419,7 @@
     font-weight: 600;
     color: var(--text-primary);
     font-size: 0.95rem;
+    overflow-wrap: anywhere;
   }
 
   .line-price {
@@ -424,6 +427,7 @@
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
     font-size: 0.9rem;
+    overflow-wrap: anywhere;
   }
 
   .qty {
@@ -436,8 +440,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
     border-radius: var(--radius-pill);
     border: var(--border-card);
     background: var(--bg-badge-pill);
@@ -528,6 +533,7 @@
   }
 
   .checkout {
+    width: 100%;
     min-height: 50px;
     border-radius: var(--radius-btn);
     border: none;

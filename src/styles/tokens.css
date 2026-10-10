@@ -102,6 +102,14 @@
   --shadow-glow: 0 8px 24px var(--accent-primary-glow);
 }
 
+/* Global reset (feature 012): padding/borders never expand an element past its
+   container, so the responsive layouts never overflow horizontally. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   display: flex;

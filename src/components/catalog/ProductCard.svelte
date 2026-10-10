@@ -55,6 +55,7 @@
     box-shadow: var(--shadow-card);
     padding: 0.75rem;
     gap: 0.6rem;
+    min-width: 0;
   }
 
   .thumb {
@@ -118,6 +119,7 @@
     font-size: 1rem;
     line-height: 1.3;
     color: var(--text-primary);
+    overflow-wrap: anywhere;
   }
 
   .price {
@@ -125,6 +127,7 @@
     font-weight: 700;
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
   }
 
   .add {

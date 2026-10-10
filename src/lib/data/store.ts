@@ -3,7 +3,7 @@
  * Selects the adapter once at module init based on the presence of public Supabase
  * environment variables; every module reads/writes through this facade.
  */
-import type { DataMode, DataStore } from "../types/domain";
+import type { DataMode, DataStore, TeamMember } from "../types/domain";
 import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
@@ -33,4 +33,13 @@ export const dataStore: DataStore = createDataStore();
  */
 export async function listFallbackServices(): Promise<PiercingService[]> {
   return createLocalAdapter().listServices();
+}
+
+/**
+ * Demo-seed team members served by the local adapter. Used as a non-blocking
+ * fallback when a live `listTeamMembers()` read fails (feature 012); components
+ * never import the hardcoded seed directly.
+ */
+export async function listFallbackTeamMembers(): Promise<TeamMember[]> {
+  return createLocalAdapter().listTeamMembers();
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { CalendarDays, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, X } from "lucide-svelte";
+  import { CalendarDays, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -11,7 +11,7 @@
   import { isSupabaseConfigured } from "../../lib/data/supabase-client";
   import { BRAND_LOGO } from "../../lib/config";
   import { PRODUCT_CATEGORIES, type ProductCategory } from "../../lib/types/content";
-  import type { ProductRecord } from "../../lib/types/domain";
+  import type { NewTeamMemberInput, ProductRecord, TeamMember } from "../../lib/types/domain";
   import {
     PIERCING_SERVICE_CATEGORIES,
     type NewServiceInput,
@@ -19,10 +19,10 @@
     type PiercingServiceCategory,
   } from "../../lib/data/services";
   import { formatCents } from "../../lib/utils/money";
-  import { uploadProductImage } from "../../lib/services/storage";
+  import { uploadImage, uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
 
-  type AdminTab = "calendar" | "catalog" | "services";
+  type AdminTab = "calendar" | "catalog" | "services" | "team";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -110,6 +110,31 @@
   let deleting = $state(false);
   let deleteError = $state("");
 
+  // Team state (feature 012)
+  let team = $state<TeamMember[]>([]);
+  let teamLoading = $state(false);
+  let teamError = $state("");
+  let tmBusy = $state<Record<string, boolean>>({});
+
+  // Team create/edit modal
+  let showTeam = $state(false);
+  let editingTeamId = $state<string | null>(null);
+  let tmName = $state("");
+  let tmRole = $state("");
+  let tmBio = $state("");
+  let tmInstagram = $state("");
+  let teamFormError = $state("");
+  let savingTeam = $state(false);
+  // Avatar upload state
+  let tmAvatarFile = $state<File | null>(null);
+  let tmAvatarPreview = $state<string | null>(null);
+  let tmUploading = $state(false);
+
+  // Team delete confirmation
+  let deletingTeam = $state<TeamMember | null>(null);
+  let deletingTeamBusy = $state(false);
+  let teamDeleteError = $state("");
+
   function switchTab(next: AdminTab) {
     tab = next;
     drawerOpen = false;
@@ -118,6 +143,7 @@
     window.history.replaceState({}, "", url);
     if (next === "catalog") void refreshCatalog();
     if (next === "services") void refreshServices();
+    if (next === "team") void refreshTeam();
   }
 
   async function refreshServices() {
@@ -252,6 +278,152 @@
     }
   }
 
+  // --- Team actions (feature 012, US2) ---
+  async function refreshTeam() {
+    try {
+      teamLoading = true;
+      teamError = "";
+      team = await dataStore.listTeamMembers({ includeInactive: true });
+    } catch (err) {
+      teamError = err instanceof DataError ? err.message : "Error al cargar el equipo";
+    } finally {
+      teamLoading = false;
+    }
+  }
+
+  function setTeamAvatarPreview(url: string | null) {
+    if (tmAvatarPreview && tmAvatarPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(tmAvatarPreview);
+    }
+    tmAvatarPreview = url;
+  }
+
+  function onTeamAvatarChange(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (file && !file.type.startsWith("image/")) {
+      teamFormError = "El archivo debe ser una imagen";
+      tmAvatarFile = null;
+      setTeamAvatarPreview(null);
+      return;
+    }
+    teamFormError = "";
+    tmAvatarFile = file;
+    setTeamAvatarPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function openCreateTeamMember() {
+    teamFormError = "";
+    editingTeamId = null;
+    tmName = "";
+    tmRole = "";
+    tmBio = "";
+    tmInstagram = "";
+    tmAvatarFile = null;
+    setTeamAvatarPreview(null);
+    showTeam = true;
+  }
+
+  function openEditTeamMember(member: TeamMember) {
+    teamFormError = "";
+    editingTeamId = member.id;
+    tmName = member.name;
+    tmRole = member.role;
+    tmBio = member.bio;
+    tmInstagram = member.instagramHandle;
+    tmAvatarFile = null;
+    setTeamAvatarPreview(member.avatarUrl || null);
+    showTeam = true;
+  }
+
+  function closeTeamModal() {
+    showTeam = false;
+    teamFormError = "";
+    tmAvatarFile = null;
+    setTeamAvatarPreview(null);
+  }
+
+  async function submitTeamMember() {
+    const name = tmName.trim();
+    const role = tmRole.trim();
+    if (name.length === 0) {
+      teamFormError = "El nombre es obligatorio";
+      return;
+    }
+    if (role.length === 0) {
+      teamFormError = "El rol es obligatorio";
+      return;
+    }
+    teamFormError = "";
+    savingTeam = true;
+    try {
+      let avatarUrl = editingTeamId
+        ? (team.find((member) => member.id === editingTeamId)?.avatarUrl ?? "")
+        : "";
+      if (tmAvatarFile) {
+        tmUploading = true;
+        avatarUrl = await uploadImage(tmAvatarFile, { prefix: "team-" });
+      }
+      const input: NewTeamMemberInput = {
+        name,
+        role,
+        avatarUrl,
+        bio: tmBio.trim(),
+        instagramHandle: tmInstagram.trim(),
+      };
+      if (editingTeamId) {
+        await dataStore.updateTeamMember(editingTeamId, input);
+      } else {
+        await dataStore.createTeamMember(input);
+      }
+      closeTeamModal();
+      await refreshTeam();
+    } catch (err) {
+      teamFormError = err instanceof DataError ? err.message : "No se pudo guardar el miembro";
+    } finally {
+      tmUploading = false;
+      savingTeam = false;
+    }
+  }
+
+  async function toggleTeamActive(member: TeamMember) {
+    tmBusy[member.id] = true;
+    teamError = "";
+    try {
+      await dataStore.updateTeamMember(member.id, { isActive: !member.isActive });
+      await refreshTeam();
+    } catch (err) {
+      teamError = err instanceof DataError ? err.message : "No se pudo cambiar el estado";
+    } finally {
+      tmBusy[member.id] = false;
+    }
+  }
+
+  function askDeleteTeamMember(member: TeamMember) {
+    teamDeleteError = "";
+    deletingTeam = member;
+  }
+
+  function cancelDeleteTeamMember() {
+    deletingTeam = null;
+    teamDeleteError = "";
+  }
+
+  async function confirmDeleteTeamMember() {
+    if (!deletingTeam) return;
+    deletingTeamBusy = true;
+    teamDeleteError = "";
+    try {
+      await dataStore.deleteTeamMember(deletingTeam.id);
+      deletingTeam = null;
+      await refreshTeam();
+    } catch (err) {
+      teamDeleteError = err instanceof DataError ? err.message : "No se pudo eliminar el miembro";
+    } finally {
+      deletingTeamBusy = false;
+    }
+  }
+
   // --- Auth gate (feature 005) ---
   async function submitLogin(event: SubmitEvent) {
     event.preventDefault();
@@ -304,7 +476,9 @@
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "catalog") tab = "catalog";
     else if (params.get("tab") === "services") tab = "services";
+    else if (params.get("tab") === "team") tab = "team";
     if (status === "dashboard" && tab === "services") void refreshServices();
+    else if (status === "dashboard" && tab === "team") void refreshTeam();
     unsubscribeAuth = onAuthStateChange((sessionEmail) => {
       if (sessionEmail) {
         adminEmail = sessionEmail;
@@ -314,6 +488,7 @@
         adminEmail = "";
         products = [];
         services = [];
+        team = [];
       }
     });
   });
@@ -526,6 +701,15 @@
           >
             <Sparkles size={18} aria-hidden="true" /> Servicios
           </button>
+          <button
+            type="button"
+            class="side-link"
+            class:active={tab === "team"}
+            aria-current={tab === "team" ? "page" : undefined}
+            onclick={() => switchTab("team")}
+          >
+            <Users size={18} aria-hidden="true" /> Equipo
+          </button>
         </nav>
       </div>
 
@@ -613,6 +797,71 @@
             </li>
           {/each}
         </ul>
+          {/if}
+        </div>
+      {/if}
+    {:else if tab === "team"}
+      <div class="toolbar">
+        <button type="button" class="primary" onclick={openCreateTeamMember}>
+          <Plus size={18} aria-hidden="true" /> Nuevo miembro
+        </button>
+      </div>
+
+      {#if teamLoading}
+        <p class="hint" aria-live="polite">Cargando equipo…</p>
+      {:else if teamError}
+        <p class="error" role="alert">{teamError}</p>
+      {:else}
+        <div class="inventory">
+          {#if team.length === 0}
+            <p class="empty-state">No hay miembros en el equipo.</p>
+          {:else}
+            <ul class="rows">
+              {#each team as member (member.id)}
+                <li class="row">
+                  <img
+                    class="avatar-thumb"
+                    src={member.avatarUrl || "/images/placeholder.svg"}
+                    alt=""
+                    loading="lazy"
+                    data-fallback="/images/placeholder.svg"
+                  />
+                  <div class="row-main">
+                    <strong class="row-title">{member.name}</strong>
+                    <span class="row-sub">{member.role}</span>
+                    {#if member.instagramHandle}
+                      <span class="row-sub">@{member.instagramHandle}</span>
+                    {/if}
+                  </div>
+                  <div class="publish">
+                    <span class="sr-label">Activo</span>
+                    <button
+                      type="button"
+                      class="toggle"
+                      class:on={member.isActive}
+                      role="switch"
+                      aria-checked={member.isActive}
+                      aria-label={`Activar o desactivar ${member.name}`}
+                      disabled={tmBusy[member.id]}
+                      onclick={() => void toggleTeamActive(member)}
+                    >
+                      <span class="knob" aria-hidden="true"></span>
+                    </button>
+                    {#if !member.isActive}
+                      <span class="chip-hidden">Inactivo</span>
+                    {/if}
+                  </div>
+                  <div class="row-actions">
+                    <button type="button" class="ghost small" onclick={() => openEditTeamMember(member)}>
+                      <Pencil size={16} aria-hidden="true" /> Editar
+                    </button>
+                    <button type="button" class="danger small" onclick={() => askDeleteTeamMember(member)}>
+                      <Trash2 size={16} aria-hidden="true" /> Eliminar
+                    </button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
           {/if}
         </div>
       {/if}
@@ -805,6 +1054,83 @@
         <button type="button" class="ghost" onclick={cancelDeleteService} disabled={deleting}>Cancelar</button>
         <button type="button" class="danger" onclick={() => void confirmDeleteService()} disabled={deleting}>
           {deleting ? "Eliminando…" : "Eliminar"}
+        </button>
+      </div>
+    </section>
+  {/if}
+
+  {#if showTeam}
+    <div class="backdrop" onclick={closeTeamModal} role="presentation"></div>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="team-title">
+      <header class="modal-head">
+        <h2 id="team-title">{editingTeamId ? "Editar miembro" : "Nuevo miembro"}</h2>
+        <button type="button" class="icon-btn" onclick={closeTeamModal} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+
+      <form onsubmit={(e) => { e.preventDefault(); void submitTeamMember(); }}>
+        <label class="field" for="tm-name">Nombre</label>
+        <input class="input" id="tm-name" type="text" bind:value={tmName} required />
+
+        <label class="field" for="tm-role">Rol</label>
+        <input class="input" id="tm-role" type="text" bind:value={tmRole} required />
+
+        <label class="field" for="tm-bio">Bio</label>
+        <textarea class="input" id="tm-bio" rows="3" bind:value={tmBio}></textarea>
+
+        <label class="field" for="tm-instagram">Instagram</label>
+        <input class="input" id="tm-instagram" type="text" bind:value={tmInstagram} placeholder="@usuario" />
+
+        <label class="field" for="tm-avatar">Avatar</label>
+        <input
+          class="input file-input"
+          id="tm-avatar"
+          type="file"
+          accept="image/*"
+          onchange={onTeamAvatarChange}
+        />
+        {#if tmAvatarPreview}
+          <div class="image-preview">
+            <img src={tmAvatarPreview} alt="Vista previa del avatar seleccionado" />
+          </div>
+        {/if}
+
+        {#if teamFormError}
+          <p class="error" role="alert">{teamFormError}</p>
+        {/if}
+
+        <div class="modal-actions">
+          <button type="button" class="ghost" onclick={closeTeamModal} disabled={savingTeam}>
+            Cancelar
+          </button>
+          <button type="submit" class="primary" disabled={savingTeam}>
+            {tmUploading ? "Subiendo imagen…" : editingTeamId ? "Guardar Cambios" : "Crear miembro"}
+          </button>
+        </div>
+      </form>
+    </section>
+  {/if}
+
+  {#if deletingTeam}
+    <div class="backdrop" onclick={cancelDeleteTeamMember} role="presentation"></div>
+    <section class="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-team-title">
+      <header class="modal-head">
+        <h2 id="delete-team-title">Eliminar miembro</h2>
+        <button type="button" class="icon-btn" onclick={cancelDeleteTeamMember} aria-label="Cerrar">
+          <X size={20} />
+        </button>
+      </header>
+      <p class="gate-hint">
+        ¿Eliminar <strong>{deletingTeam.name}</strong>? Se quitará del panel y de la sección pública.
+      </p>
+      {#if teamDeleteError}
+        <p class="error" role="alert">{teamDeleteError}</p>
+      {/if}
+      <div class="modal-actions">
+        <button type="button" class="ghost" onclick={cancelDeleteTeamMember} disabled={deletingTeamBusy}>Cancelar</button>
+        <button type="button" class="danger" onclick={() => void confirmDeleteTeamMember()} disabled={deletingTeamBusy}>
+          {deletingTeamBusy ? "Eliminando…" : "Eliminar"}
         </button>
       </div>
     </section>
@@ -1192,6 +1518,16 @@
     border-radius: var(--radius-image);
     object-fit: cover;
     background: var(--bg-surface-elevated);
+  }
+
+  .avatar-thumb {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-surface-elevated);
+    border: var(--border-card);
   }
 
   .stock-edit {

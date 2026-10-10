@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import TeamSection from "../components/team/TeamSection.svelte";
 import { GALLERY_ITEMS, PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
 import { PIERCING_SERVICE_CATEGORIES } from "../lib/data/services";
 import { dataStore, listFallbackServices } from "../lib/data/store";
@@ -107,6 +108,9 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
     </div>
     <a class="cta cta-primary book-link" href="/booking">Reservar mi turno</a>
   </section>
+
+  <!-- Team: active artists/staff from the managed data source (feature 012, US1) -->
+  <TeamSection client:visible />
 </BaseLayout>
 
 <style>

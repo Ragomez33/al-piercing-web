@@ -1,5 +1,5 @@
 /**
- * Product image storage service.
+ * Image storage service.
  *
  * The ONLY place components may upload files: Supabase Storage access lives here
  * so `.svelte` islands never call Supabase directly (constitution §2.3, Data
@@ -9,8 +9,13 @@
 import { getSupabaseClient, isSupabaseConfigured } from "../data/supabase-client";
 import { DataError } from "../types/domain";
 
-/** Public Supabase Storage bucket for product images. */
+/** Public Supabase Storage bucket shared by product and team images. */
 const PRODUCT_BUCKET = "products";
+
+export interface UploadImageOptions {
+  /** Path namespace so the shared bucket stays tidy (e.g. "product-", "team-"). */
+  prefix: string;
+}
 
 function fileExtension(file: File): string {
   if (file.name.includes(".")) {
@@ -33,13 +38,13 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 /**
- * Uploads a product image and returns its public URL.
+ * Uploads an image and returns its public URL.
  *
  * - Production: uploads to the public `products` bucket with a unique
- *   `product-<timestamp>-<uuid>.<ext>` name and returns `getPublicUrl()`.
+ *   `<prefix><timestamp>-<uuid>.<ext>` name and returns `getPublicUrl()`.
  * - Demo: returns a data URL so the image persists in `localStorage`.
  */
-export async function uploadProductImage(file: File): Promise<string> {
+export async function uploadImage(file: File, options: UploadImageOptions): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new DataError("El archivo debe ser una imagen");
   }
@@ -49,7 +54,7 @@ export async function uploadProductImage(file: File): Promise<string> {
   }
 
   const client = getSupabaseClient();
-  const path = `product-${Date.now()}-${crypto.randomUUID()}.${fileExtension(file)}`;
+  const path = `${options.prefix}${Date.now()}-${crypto.randomUUID()}.${fileExtension(file)}`;
 
   const { error } = await client.storage.from(PRODUCT_BUCKET).upload(path, file, {
     cacheControl: "3600",
@@ -61,4 +66,12 @@ export async function uploadProductImage(file: File): Promise<string> {
   const { data } = client.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
   if (!data.publicUrl) throw new DataError("No se pudo obtener la URL de la imagen");
   return data.publicUrl;
+}
+
+/**
+ * Uploads a product image and returns its public URL.
+ * Thin wrapper over `uploadImage` so the product flow is unchanged.
+ */
+export async function uploadProductImage(file: File): Promise<string> {
+  return uploadImage(file, { prefix: "product-" });
 }

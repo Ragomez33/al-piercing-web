@@ -1,26 +1,30 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ChevronLeft, ChevronRight, X } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight, Plus, X } from "lucide-svelte";
   import { DataError, dataStore } from "../../lib/data/store";
   import { approveBooking, cancelBooking } from "../../lib/services/booking";
   import { buildBookingConfirmationLink } from "../../lib/utils/booking";
   import { WHATSAPP_PHONE } from "../../lib/config";
+  import { localISODate } from "../../lib/utils/dates";
   import type { Booking, BookingStatus, TimeBlock } from "../../lib/types/domain";
   import {
-    addDays,
+    addMonths,
     buildOccupancies,
     calendarRows,
-    heightForMinutes,
+    dayStatusSummary,
     isBusy,
-    startOfWeek,
-    timeAtOffsetY,
-    topForTime,
-    weekDays,
+    monthGrid,
+    monthLabel,
+    startOfMonth,
     type Occupancy,
   } from "../../lib/utils/calendar";
   import { formatCents } from "../../lib/utils/money";
 
-  let weekStart = $state(startOfWeek(new Date()));
+  const slots = calendarRows();
+  const WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+
+  let monthStart = $state(startOfMonth(new Date()));
+  let selectedDate = $state<string>(localISODate(new Date()));
   let bookings = $state<Booking[]>([]);
   let blocks = $state<TimeBlock[]>([]);
   let durations = $state<Record<string, number>>({});
@@ -43,17 +47,45 @@
     CANCELLED: "Cancelado",
   };
 
-  // Block modals
+  // Block create / manage modals
   let creating = $state(false);
-  let nbDate = $state("");
   let nbTime = $state("");
   let nbLabel = $state("Almuerzo");
   let nbDuration = $state<number>(30);
   let creatingError = $state("");
   let managing = $state<TimeBlock | null>(null);
 
-  const days = $derived(weekDays(weekStart));
-  const rows = calendarRows();
+  const cells = $derived(monthGrid(monthStart));
+  const monthCells = $derived(cells.filter((cell) => cell.inMonth));
+  const monthTitle = $derived(monthLabel(monthStart));
+  const selectedBookings = $derived(
+    bookings
+      .filter((booking) => booking.date === selectedDate)
+      .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot)),
+  );
+  const selectedBlocks = $derived(
+    blocks
+      .filter((block) => block.date === selectedDate)
+      .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot)),
+  );
+
+  function dateFromISO(iso: string): Date {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function weekdayShort(iso: string): string {
+    return dateFromISO(iso).toLocaleDateString("es", { weekday: "short" });
+  }
+
+  function dayLabel(iso: string): string {
+    const label = dateFromISO(iso).toLocaleDateString("es", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
 
   function durationFor(serviceId: string | null): number {
     if (!serviceId) return 30;
@@ -81,8 +113,21 @@
     }
   }
 
-  function goWeek(delta: number) {
-    weekStart = addDays(weekStart, delta * 7);
+  function goMonth(delta: number) {
+    const next = addMonths(monthStart, delta);
+    monthStart = next;
+    const first = localISODate(startOfMonth(next));
+    const today = localISODate(new Date());
+    selectedDate = today.slice(0, 7) === first.slice(0, 7) ? today : first;
+  }
+
+  function goToday() {
+    monthStart = startOfMonth(new Date());
+    selectedDate = localISODate(new Date());
+  }
+
+  function selectDay(date: string) {
+    selectedDate = date;
   }
 
   function occupanciesFor(date: string, excludeId?: string): Occupancy[] {
@@ -100,60 +145,12 @@
     );
   }
 
-  function occupantAt(date: string, time: string): { kind: "booking" | "block"; id: string } | null {
-    const booking = bookings.find(
-      (b) =>
-        b.date === date &&
-        b.status !== "CANCELLED" &&
-        isBusy([{ time: b.timeSlot, durationMinutes: durationFor(b.serviceId) }], time, 30),
-    );
-    if (booking) return { kind: "booking", id: booking.id };
-    const block = blocks.find(
-      (b) =>
-        b.date === date &&
-        isBusy([{ time: b.timeSlot, durationMinutes: b.durationMinutes }], time, 30),
-    );
-    if (block) return { kind: "block", id: block.id };
-    return null;
-  }
-
-  function activateCell(date: string, time: string) {
-    const occupant = occupantAt(date, time);
-    if (!occupant) {
-      nbDate = date;
-      nbTime = time;
-      creatingError = "";
-      creating = true;
-      return;
-    }
-    if (occupant.kind === "booking") {
-      const booking = bookings.find((b) => b.id === occupant.id);
-      if (booking) openBooking(booking);
-    } else {
-      const block = blocks.find((b) => b.id === occupant.id);
-      if (block) managing = block;
-    }
-  }
-
-  function onColumnClick(event: MouseEvent, date: string) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    activateCell(date, timeAtOffsetY(event.clientY - rect.top));
-  }
-
-  function onDayKeydown(event: KeyboardEvent, date: string) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    // Keyboard activation uses the first row of the day column.
-    activateCell(date, rows[0]);
-  }
-
   function openBooking(booking: Booking) {
     selected = booking;
     actionError = "";
     rescheduling = false;
     approving = false;
     cancelling = false;
-    // Already-confirmed bookings keep the confirmation link re-sendable (FR-011).
     confirmationUrl =
       booking.status === "CONFIRMED"
         ? buildBookingConfirmationLink(booking, WHATSAPP_PHONE)
@@ -213,7 +210,7 @@
     }
     const occ = occupanciesFor(reDate, selected.id);
     const dur = durationFor(selected.serviceId);
-    reSlots = rows.filter((slot) => !isBusy(occ, slot, dur));
+    reSlots = slots.filter((slot) => !isBusy(occ, slot, dur));
   }
 
   async function applyReschedule(slot: string) {
@@ -230,15 +227,23 @@
   }
 
   // --- Block actions ---
+  function openCreateBlock() {
+    nbTime = slots[0] ?? "09:00";
+    nbLabel = "Almuerzo";
+    nbDuration = 30;
+    creatingError = "";
+    creating = true;
+  }
+
   async function submitBlock() {
-    if (!nbDate || !nbTime || !nbLabel.trim()) {
+    if (!nbTime || !nbLabel.trim()) {
       creatingError = "Completá la etiqueta del bloqueo";
       return;
     }
     creatingError = "";
     try {
       await dataStore.createBlock({
-        date: nbDate,
+        date: selectedDate,
         timeSlot: nbTime,
         durationMinutes: nbDuration,
         label: nbLabel.trim(),
@@ -252,6 +257,7 @@
 
   async function deleteManagedBlock() {
     if (!managing) return;
+    actionError = "";
     try {
       await dataStore.deleteBlock(managing.id);
       managing = null;
@@ -264,17 +270,16 @@
   onMount(() => void reload());
 </script>
 
-<section class="calendar" aria-label="Calendario semanal">
+<section class="calendar" aria-label="Calendario mensual">
   <header class="cal-head">
-    <button type="button" class="nav" onclick={() => goWeek(-1)} aria-label="Semana anterior">
+    <button type="button" class="nav" onclick={() => goMonth(-1)} aria-label="Mes anterior">
       <ChevronLeft size={20} />
     </button>
-    <span class="cal-title">
-      Semana del {days[0].date} al {days[6].date}
-    </span>
-    <button type="button" class="nav" onclick={() => goWeek(1)} aria-label="Semana siguiente">
+    <span class="cal-title">{monthTitle}</span>
+    <button type="button" class="nav" onclick={() => goMonth(1)} aria-label="Mes siguiente">
       <ChevronRight size={20} />
     </button>
+    <button type="button" class="today-btn" onclick={goToday}>Hoy</button>
   </header>
 
   {#if loading}
@@ -282,58 +287,136 @@
   {:else if calError}
     <p class="error" role="alert">{calError}</p>
   {:else}
-    <div class="scroll">
-      <div class="grid">
-        <div class="timecol" aria-hidden="true">
-          {#each rows as row (row)}
-            <span class="time-label">{row}</span>
-          {/each}
-        </div>
-
-        {#each days as day (day.date)}
-          <div
-            class="daycol"
-            class:today={day.isToday}
-            role="button"
-            tabindex="0"
-            aria-label={`Agenda del ${day.label}. Usar Enter o Espacio para bloquear un horario o ver una cita.`}
-            onclick={(e) => onColumnClick(e, day.date)}
-            onkeydown={(e) => onDayKeydown(e, day.date)}
+    <!-- Desktop ≥768px: monthly grid -->
+    <div class="grid-wrap">
+      <div class="weekdays" aria-hidden="true">
+        {#each WEEKDAYS as wd (wd)}
+          <span>{wd}</span>
+        {/each}
+      </div>
+      <div class="month-grid">
+        {#each cells as cell (cell.date)}
+          {@const summary = dayStatusSummary(bookings, cell.date)}
+          <button
+            type="button"
+            class="day-cell"
+            class:out={!cell.inMonth}
+            class:today={cell.isToday}
+            class:selected={selectedDate === cell.date}
+            disabled={!cell.inMonth}
+            aria-current={selectedDate === cell.date ? "date" : undefined}
+            aria-label={`${dayLabel(cell.date)}: ${summary.total} ${
+              summary.total === 1 ? "cita" : "citas"
+            }`}
+            onclick={() => selectDay(cell.date)}
           >
-            <span class="day-head">{day.label}</span>
-            {#each blocks.filter((b) => b.date === day.date) as block (block.id)}
-              <button
-                type="button"
-                class="card block"
-                style={`top: ${topForTime(block.timeSlot)}px; height: ${heightForMinutes(block.durationMinutes)}px;`}
-                onclick={(e) => { e.stopPropagation(); managing = block; }}
-                aria-label={`Bloqueo ${block.label} ${block.timeSlot}`}
-              >
-                <span class="ev-time">{block.timeSlot}</span>
-                <span class="ev-title">{block.label}</span>
-              </button>
-            {/each}
-            {#each bookings.filter((b) => b.date === day.date) as booking (booking.id)}
-              <button
-                type="button"
-                class="card booking {booking.status.toLowerCase()}"
-                style={`top: ${topForTime(booking.timeSlot)}px; height: ${heightForMinutes(durationFor(booking.serviceId))}px;`}
-                onclick={(e) => { e.stopPropagation(); openBooking(booking); }}
-                aria-label={`${booking.timeSlot} ${booking.clientName} ${booking.serviceName} ${STATUS_LABELS[booking.status]}`}
-              >
-                <span class="ev-time">{booking.timeSlot}</span>
-                <span class="ev-title">{booking.clientName} ({booking.serviceName})</span>
-                <span class="ev-badge badge badge-{booking.status.toLowerCase()}">
-                  {STATUS_LABELS[booking.status]}
-                </span>
-              </button>
-            {/each}
-          </div>
+            <span class="cell-num">{cell.dayNumber}</span>
+            {#if summary.total > 0}
+              <span class="cell-badge">{summary.total}</span>
+              <span class="cell-dots">
+                {#if summary.pending > 0}
+                  <span class="dot pending" title={`${summary.pending} pendientes`}></span>
+                {/if}
+                {#if summary.confirmed > 0}
+                  <span class="dot confirmed" title={`${summary.confirmed} confirmadas`}></span>
+                {/if}
+                {#if summary.cancelled > 0}
+                  <span class="dot cancelled" title={`${summary.cancelled} canceladas`}></span>
+                {/if}
+              </span>
+            {/if}
+          </button>
         {/each}
       </div>
     </div>
 
-    <p class="hint">Clic en una cita para ver el detalle; clic en un espacio libre para bloquearlo.</p>
+    <!-- Mobile <768px: horizontally scrollable day selector -->
+    <div class="day-strip" role="group" aria-label="Selector de día">
+      {#each monthCells as cell (cell.date)}
+        {@const summary = dayStatusSummary(bookings, cell.date)}
+        <button
+          type="button"
+          class="day-chip"
+          class:today={cell.isToday}
+          class:selected={selectedDate === cell.date}
+          aria-current={selectedDate === cell.date ? "date" : undefined}
+          aria-label={`${dayLabel(cell.date)}: ${summary.total} ${
+            summary.total === 1 ? "cita" : "citas"
+          }`}
+          onclick={() => selectDay(cell.date)}
+        >
+          <span class="chip-wd">{weekdayShort(cell.date)}</span>
+          <span class="chip-num">{cell.dayNumber}</span>
+          {#if summary.total > 0}
+            <span class="chip-dot" aria-hidden="true"></span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+
+    <!-- Day detail (below the grid on desktop, below the strip on mobile) -->
+    <section class="day-detail" aria-labelledby="day-detail-title">
+      <div class="detail-head">
+        <h2 id="day-detail-title">{dayLabel(selectedDate)}</h2>
+        <button type="button" class="ghost small" onclick={openCreateBlock}>
+          <Plus size={16} aria-hidden="true" /> Nuevo bloqueo
+        </button>
+      </div>
+
+      {#if selectedBookings.length === 0 && selectedBlocks.length === 0}
+        <p class="empty">Sin citas este día.</p>
+      {:else}
+        <ul class="day-list">
+          {#each selectedBookings as booking (booking.id)}
+            <li>
+              <button
+                type="button"
+                class="appt"
+                onclick={() => openBooking(booking)}
+                aria-label={`${booking.timeSlot} ${booking.clientName} ${booking.serviceName} ${
+                  STATUS_LABELS[booking.status]
+                }`}
+              >
+                <span class="appt-time">{booking.timeSlot}</span>
+                <span class="appt-main">
+                  <span class="appt-title">{booking.clientName}</span>
+                  <span class="appt-service">
+                    {booking.serviceName} · {durationFor(booking.serviceId)} min
+                  </span>
+                  {#if booking.notes}
+                    <span class="appt-notes">{booking.notes}</span>
+                  {/if}
+                </span>
+                <span class="badge badge-{booking.status.toLowerCase()}">
+                  {STATUS_LABELS[booking.status]}
+                </span>
+              </button>
+            </li>
+          {/each}
+
+          {#each selectedBlocks as block (block.id)}
+            <li>
+              <button
+                type="button"
+                class="appt block-row"
+                onclick={() => {
+                  actionError = "";
+                  managing = block;
+                }}
+                aria-label={`Bloqueo ${block.label} ${block.timeSlot}`}
+              >
+                <span class="appt-time">{block.timeSlot}</span>
+                <span class="appt-main">
+                  <span class="appt-title">{block.label}</span>
+                  <span class="appt-service">Bloqueo · {block.durationMinutes} min</span>
+                </span>
+                <span class="badge badge-block">Bloqueo</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
   {/if}
 </section>
 
@@ -421,7 +504,15 @@
     </header>
 
     <form onsubmit={(e) => { e.preventDefault(); submitBlock(); }}>
-      <p class="hint-block">{nbDate} · {nbTime}</p>
+      <p class="hint-block">{selectedDate}</p>
+
+      <label class="field" for="nb-time">Hora de inicio</label>
+      <select class="input" id="nb-time" bind:value={nbTime}>
+        {#each slots as slot (slot)}
+          <option value={slot}>{slot}</option>
+        {/each}
+      </select>
+
       <label class="field" for="nb-label">Etiqueta</label>
       <input class="input" id="nb-label" type="text" list="block-labels" bind:value={nbLabel} />
       <datalist id="block-labels">
@@ -482,14 +573,23 @@
   .calendar {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
   }
 
   .cal-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .cal-title {
+    flex: 1;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    text-transform: capitalize;
   }
 
   .nav {
@@ -503,137 +603,318 @@
     background: var(--bg-badge-pill);
     color: var(--text-secondary);
     cursor: pointer;
+    flex: 0 0 auto;
   }
 
-  .cal-title {
-    color: var(--text-primary);
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    text-align: center;
+  .nav:hover,
+  .nav:focus-visible,
+  .today-btn:hover,
+  .today-btn:focus-visible {
+    color: var(--accent-primary);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
   }
 
-  .scroll {
-    overflow-x: auto;
+  .today-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.4rem 1rem;
+    border-radius: var(--radius-pill);
+    border: var(--border-card);
+    background: var(--bg-badge-pill);
+    color: var(--text-secondary);
+    font-weight: 600;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  /* ---- Desktop monthly grid (≥768px) ---- */
+  .grid-wrap {
+    display: block;
     border: var(--border-card);
     border-radius: var(--radius-card);
     background: var(--bg-app-body);
+    padding: 0.75rem;
   }
 
-  .grid {
+  .weekdays {
     display: grid;
-    grid-template-columns: 60px repeat(7, minmax(120px, 1fr));
-    min-width: 900px;
-    height: 840px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
   }
 
-  .timecol {
-    display: flex;
-    flex-direction: column;
-    border-right: var(--border-card);
-  }
-
-  .time-label {
-    height: 40px;
-    padding-right: 0.5rem;
-    text-align: right;
+  .weekdays span {
+    text-align: center;
     color: var(--text-muted);
     font-size: 0.72rem;
-    font-variant-numeric: tabular-nums;
-    transform: translateY(-8px);
-  }
-
-  .daycol {
-    position: relative;
-    border-right: var(--divider-subtle);
-    cursor: cell;
-    background: repeating-linear-gradient(
-      180deg,
-      transparent 0 39px,
-      var(--divider-subtle) 39px 40px
-    );
-  }
-
-  .daycol:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: -2px;
-  }
-
-  .daycol.today {
-    background-color: var(--bg-gold-faint);
-  }
-
-  .day-head {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: block;
-    text-align: center;
-    padding: 0.35rem 0;
-    background: var(--bg-card-light);
-    border-bottom: var(--divider-subtle);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
     font-weight: 700;
-    text-transform: capitalize;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
-  .card {
-    position: absolute;
-    left: 4px;
-    right: 4px;
-    z-index: 1;
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+  }
+
+  .day-cell {
+    position: relative;
+    min-height: 76px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
-    padding: 0.3rem 0.45rem;
-    border-radius: var(--radius-image);
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0.4rem 0.45rem;
     text-align: left;
+    background: var(--bg-card-light);
+    border: 1px solid transparent;
+    border-radius: var(--radius-image);
+    color: var(--text-primary);
     font: inherit;
     cursor: pointer;
-    overflow: hidden;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
   }
 
-  .card.booking.confirmed {
-    background: var(--bg-card-light);
-    border: 1px solid var(--accent-primary);
-    box-shadow: var(--shadow-glow);
-    color: var(--text-primary);
+  .day-cell:hover:not(:disabled),
+  .day-cell:focus-visible {
+    border-color: var(--accent-primary);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
   }
 
-  .card.booking.pending {
-    background: var(--bg-card-translucent);
-    border: 1px dashed var(--accent-gold);
-    color: var(--text-secondary);
-  }
-
-  .card.booking.cancelled {
-    background: var(--status-cancelled-bg);
-    border: 1px dashed var(--accent-negative);
+  .day-cell.out {
+    background: transparent;
     color: var(--text-muted);
+    border-color: transparent;
+    cursor: default;
   }
 
-  .card.block {
-    background: var(--bg-wood-pill);
-    border: 1px dashed var(--accent-wood);
-    color: var(--accent-wood);
+  .day-cell.today {
+    background: var(--bg-gold-faint);
   }
 
-  .ev-time {
+  .day-cell.selected {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .cell-num {
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cell-badge {
+    align-self: flex-end;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    background: var(--accent-primary);
+    color: var(--accent-on);
     font-size: 0.7rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
 
-  .ev-title {
-    font-size: 0.72rem;
-    line-height: 1.2;
+  .cell-dots {
+    display: inline-flex;
+    gap: 0.2rem;
+    margin-top: auto;
   }
 
-  .ev-badge {
-    align-self: flex-start;
-    margin-top: 0.1rem;
-    font-size: 0.6rem;
-    padding: 0.05rem 0.4rem;
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dot.pending {
+    background: var(--accent-gold);
+  }
+
+  .dot.confirmed {
+    background: var(--accent-positive);
+  }
+
+  .dot.cancelled {
+    background: var(--accent-negative);
+  }
+
+  /* ---- Mobile day selector (<768px) ---- */
+  .day-strip {
+    display: none;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .day-chip {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    min-width: 52px;
+    min-height: 60px;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius-image);
+    border: var(--border-card);
+    background: var(--bg-card-light);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .day-chip.today {
+    background: var(--bg-gold-faint);
+  }
+
+  .day-chip.selected {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .day-chip:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .chip-wd {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .chip-num {
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+  }
+
+  .day-chip.selected .chip-dot {
+    background: var(--accent-on);
+  }
+
+  /* ---- Day detail (shared) ---- */
+  .day-detail {
+    border-top: var(--divider-subtle);
+    padding-top: 1rem;
+  }
+
+  .detail-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .detail-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    text-transform: capitalize;
+    overflow-wrap: anywhere;
+  }
+
+  .day-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .appt {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .appt:hover,
+  .appt:focus-visible {
+    border-color: var(--accent-primary);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+  }
+
+  .appt-time {
+    flex: 0 0 auto;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .appt-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .appt-title {
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .appt-service,
+  .appt-notes {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+  }
+
+  .appt-notes {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .block-row {
+    border-style: dashed;
+    border-color: var(--accent-wood);
+  }
+
+  .empty {
+    margin: 0;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 1.25rem 0;
   }
 
   .hint {
@@ -706,6 +987,7 @@
     margin: 0;
     color: var(--text-primary);
     text-align: right;
+    overflow-wrap: anywhere;
   }
 
   .detail dd.gold {
@@ -714,6 +996,7 @@
   }
 
   .badge {
+    flex: 0 0 auto;
     font-size: 0.72rem;
     font-weight: 700;
     padding: 0.2rem 0.6rem;
@@ -738,6 +1021,12 @@
     border: 1px solid var(--status-cancelled-edge);
   }
 
+  .badge-block {
+    background: var(--bg-wood-pill);
+    color: var(--accent-wood);
+    border: 1px dashed var(--accent-wood);
+  }
+
   .actions {
     display: flex;
     gap: 0.5rem;
@@ -751,12 +1040,19 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.35rem;
     min-height: 44px;
     padding: 0.5rem 1.1rem;
     border-radius: var(--radius-btn);
     font-weight: 600;
     cursor: pointer;
     border: none;
+  }
+
+  .small {
+    min-height: 38px;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.9rem;
   }
 
   .primary {
@@ -842,6 +1138,11 @@
     cursor: pointer;
   }
 
+  .slot:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
   .hint-block {
     margin: 0;
     color: var(--text-gold);
@@ -859,5 +1160,25 @@
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 0.6rem;
+  }
+
+  /* Breakpoint switch: grid on desktop, day strip on mobile. */
+  @media (max-width: 767px) {
+    .grid-wrap {
+      display: none;
+    }
+
+    .day-strip {
+      display: flex;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .day-cell,
+    .appt,
+    .primary,
+    .ghost {
+      transition: none;
+    }
   }
 </style>

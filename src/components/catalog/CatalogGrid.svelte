@@ -69,8 +69,9 @@
 <style>
   .grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
+    min-width: 0;
   }
 
   .error {
@@ -86,6 +87,7 @@
     border: var(--border-card);
     border-radius: var(--radius-card);
     background: var(--bg-card-light);
+    overflow-wrap: anywhere;
   }
 
   /* Skeleton loader — mirrors the ProductCard shape in Dark Luxury tones. */
@@ -133,13 +135,13 @@
 
   @media (min-width: 768px) {
     .grid {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 
   @media (max-width: 360px) {
     .grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 

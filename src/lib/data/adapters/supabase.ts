@@ -13,8 +13,10 @@ import {
   type NewBlockInput,
   type NewBookingInput,
   type NewProductInput,
+  type NewTeamMemberInput,
   type ProductRecord,
   type SchedulePatch,
+  type TeamMember,
   type TimeBlock,
 } from "../../types/domain";
 import type { Database } from "../../../types/supabase";
@@ -26,6 +28,7 @@ type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 type TimeBlockRow = Database["public"]["Tables"]["time_blocks"]["Row"];
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
+type TeamRow = Database["public"]["Tables"]["team_members"]["Row"];
 
 function toTimeBlock(row: TimeBlockRow): TimeBlock {
   const duration = row.duration_minutes;
@@ -96,6 +99,25 @@ function toService(row: ServiceRow): PiercingService {
 function requireRow<T>(data: T | null, label: string): T {
   if (!data) throw new DataError(`${label} no se devolvió`);
   return data;
+}
+
+/** Trims and strips a single leading `@` so handles are stored bare. */
+function normalizeInstagram(handle: string): string {
+  const trimmed = handle.trim();
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
+function toTeamMember(row: TeamRow): TeamMember {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    instagramHandle: row.instagram_handle,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
 }
 
 /**
@@ -299,6 +321,63 @@ export function createSupabaseAdapter(): DataStore {
       const { data, error } = await client.from("time_blocks").select("time_slot").eq("block_date", date);
       if (error) throw new DataError(error.message);
       return (data ?? []).map((row) => row.time_slot);
+    },
+
+    async listTeamMembers(input): Promise<TeamMember[]> {
+      const client = getSupabaseClient();
+      let query = client
+        .from("team_members")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (!input?.includeInactive) query = query.eq("is_active", true);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toTeamMember(row));
+    },
+
+    async createTeamMember(input: NewTeamMemberInput): Promise<TeamMember> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("team_members")
+        .insert({
+          name: input.name.trim(),
+          role: input.role.trim(),
+          avatar_url: input.avatarUrl,
+          bio: input.bio,
+          instagram_handle: normalizeInstagram(input.instagramHandle),
+          is_active: true,
+        })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toTeamMember(requireRow(data, "El miembro"));
+    },
+
+    async updateTeamMember(id, patch): Promise<TeamMember> {
+      const client = getSupabaseClient();
+      const update: Database["public"]["Tables"]["team_members"]["Update"] = {};
+      if (patch.name !== undefined) update.name = patch.name.trim();
+      if (patch.role !== undefined) update.role = patch.role.trim();
+      if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl;
+      if (patch.bio !== undefined) update.bio = patch.bio;
+      if (patch.instagramHandle !== undefined) {
+        update.instagram_handle = normalizeInstagram(patch.instagramHandle);
+      }
+      if (patch.isActive !== undefined) update.is_active = patch.isActive;
+      const { data, error } = await client
+        .from("team_members")
+        .update(update)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toTeamMember(requireRow(data, "El miembro"));
+    },
+
+    async deleteTeamMember(id: string): Promise<void> {
+      const client = getSupabaseClient();
+      const { error } = await client.from("team_members").delete().eq("id", id);
+      if (error) throw new DataError(error.message);
     },
   };
 }

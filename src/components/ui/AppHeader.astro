@@ -1,6 +1,7 @@
 ---
 import { NAV_ITEMS, STUDIO_PROFILE } from "../../lib/types/content";
 import { BRAND_LOGO } from "../../lib/config";
+import MobileNav from "./MobileNav.svelte";
 
 const path = Astro.url.pathname;
 
@@ -34,6 +35,8 @@ function isActive(href: string): boolean {
         }
       </ul>
     </nav>
+
+    <MobileNav client:load />
   </div>
 </header>
 
@@ -130,6 +133,13 @@ function isActive(href: string): boolean {
   .brand:focus-visible {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
+  }
+
+  /* Below 768px the desktop nav is replaced by the MobileNav drawer island. */
+  @media (max-width: 767px) {
+    .nav {
+      display: none;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

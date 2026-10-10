@@ -10,18 +10,22 @@ import {
   type NewBlockInput,
   type NewBookingInput,
   type NewProductInput,
+  type NewTeamMemberInput,
   type ProductRecord,
   type SchedulePatch,
+  type TeamMember,
   type TimeBlock,
 } from "../../types/domain";
 import { PRODUCTS } from "../../types/content";
 import { calcDepositCents } from "../../utils/money";
 import { PIERCING_SERVICES, type NewServiceInput, type PiercingService } from "../services";
+import { TEAM_MEMBERS } from "../team";
 
 const BOOKINGS_KEY = "alpi:bookings:v1";
 const PRODUCTS_KEY = "alpi:products:v1";
 const BLOCKS_KEY = "alpi:timeblocks:v1";
 const SERVICES_KEY = "alpi:services:v1";
+const TEAM_KEY = "alpi:team:v1";
 
 function storage(): Storage {
   try {
@@ -45,6 +49,10 @@ function seedProducts(): ProductRecord[] {
 
 function seedServices(): PiercingService[] {
   return PIERCING_SERVICES.map((service) => ({ ...service }));
+}
+
+function seedTeamMembers(): TeamMember[] {
+  return TEAM_MEMBERS.map((member) => ({ ...member }));
 }
 
 const SERVICE_CATEGORIES = ["NOSTRIL", "HELIX", "NAVEL", "TITANIO"] as const;
@@ -120,6 +128,36 @@ function validateService(input: NewServiceInput): void {
   }
   if (!Number.isInteger(input.durationMinutes) || input.durationMinutes <= 0) {
     throw new DataError("La duración debe ser un entero mayor a 0 (minutos)");
+  }
+}
+
+function isTeamMember(value: unknown): value is TeamMember {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.role === "string" &&
+    typeof value.avatarUrl === "string" &&
+    typeof value.bio === "string" &&
+    typeof value.instagramHandle === "string" &&
+    typeof value.isActive === "boolean" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+/** Trims and strips a single leading `@` so handles are stored bare. */
+function normalizeInstagram(handle: string): string {
+  const trimmed = handle.trim();
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
+/** Shared validation for create/update (demo parity with the DB checks). */
+function validateTeamMember(input: NewTeamMemberInput): void {
+  if (input.name.trim().length === 0) {
+    throw new DataError("El nombre es obligatorio");
+  }
+  if (input.role.trim().length === 0) {
+    throw new DataError("El rol es obligatorio");
   }
 }
 
@@ -318,6 +356,65 @@ export function createLocalAdapter(): DataStore {
     async getBlockedSlots(date: string): Promise<string[]> {
       const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
       return blocks.filter((block) => block.date === date).map((block) => block.timeSlot);
+    },
+
+    async listTeamMembers(input): Promise<TeamMember[]> {
+      const members = await readArray(TEAM_KEY, seedTeamMembers(), isTeamMember);
+      return input?.includeInactive ? members : members.filter((member) => member.isActive);
+    },
+
+    async createTeamMember(input: NewTeamMemberInput): Promise<TeamMember> {
+      validateTeamMember(input);
+      const members = await readArray(TEAM_KEY, seedTeamMembers(), isTeamMember);
+      const record: TeamMember = {
+        id: newId(),
+        name: input.name.trim(),
+        role: input.role.trim(),
+        avatarUrl: input.avatarUrl,
+        bio: input.bio,
+        instagramHandle: normalizeInstagram(input.instagramHandle),
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      await writeArray(TEAM_KEY, [...members, record]);
+      return record;
+    },
+
+    async updateTeamMember(id, patch): Promise<TeamMember> {
+      const members = await readArray(TEAM_KEY, seedTeamMembers(), isTeamMember);
+      const current = members.find((member) => member.id === id);
+      if (!current) throw new DataError("Miembro no encontrado");
+      const merged: TeamMember = {
+        ...current,
+        ...patch,
+        name: patch.name !== undefined ? patch.name.trim() : current.name,
+        role: patch.role !== undefined ? patch.role.trim() : current.role,
+        instagramHandle:
+          patch.instagramHandle !== undefined
+            ? normalizeInstagram(patch.instagramHandle)
+            : current.instagramHandle,
+      };
+      validateTeamMember({
+        name: merged.name,
+        role: merged.role,
+        avatarUrl: merged.avatarUrl,
+        bio: merged.bio,
+        instagramHandle: merged.instagramHandle,
+      });
+      const next = members.map((member) => (member.id === id ? merged : member));
+      await writeArray(TEAM_KEY, next);
+      return merged;
+    },
+
+    async deleteTeamMember(id: string): Promise<void> {
+      const members = await readArray(TEAM_KEY, seedTeamMembers(), isTeamMember);
+      if (!members.some((member) => member.id === id)) {
+        throw new DataError("Miembro no encontrado");
+      }
+      await writeArray(
+        TEAM_KEY,
+        members.filter((member) => member.id !== id),
+      );
     },
   };
 }
