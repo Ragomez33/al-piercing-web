@@ -1,17 +1,23 @@
 ---
 import "../styles/tokens.css";
+import SEO from "../components/SEO.astro";
 import InkBackgroundCanvas from "../components/canvas/InkBackgroundCanvas.svelte";
 import AppHeader from "../components/ui/AppHeader.astro";
 import Footer from "../components/Footer.astro";
-import { STUDIO_PROFILE } from "../lib/types/content";
+import { buildLocalBusinessJsonLd } from "../lib/seo";
 import { ADMIN_PREFIX, BRAND_LOGO, THEME_COLOR } from "../lib/config";
 
 interface Props {
   title?: string;
+  description?: string;
+  image?: string;
+  type?: string;
+  noindex?: boolean;
 }
 
-const { title = `${STUDIO_PROFILE.brand} — ${STUDIO_PROFILE.tagline}` } = Astro.props;
+const { title, description, image, type, noindex } = Astro.props;
 const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
+const localBusinessJsonLd = buildLocalBusinessJsonLd();
 ---
 
 <!doctype html>
@@ -21,12 +27,14 @@ const isAdmin = Astro.url.pathname.startsWith(ADMIN_PREFIX);
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="description" content={STUDIO_PROFILE.bio} />
     <meta name="theme-color" content={THEME_COLOR} />
     <link rel="icon" type="image/png" href={BRAND_LOGO} />
     <link rel="apple-touch-icon" href={BRAND_LOGO} />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
+
+    <SEO title={title} description={description} image={image} type={type} noindex={noindex} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(localBusinessJsonLd)} />
   </head>
   <body>
     <div class="backdrop" aria-hidden="true">

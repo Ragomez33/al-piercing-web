@@ -1,0 +1,51 @@
+---
+/**
+ * Reusable SEO head metadata (feature 014).
+ * Renders title/description/robots/canonical + OpenGraph + Twitter Cards, resolving
+ * studio-wide defaults from `src/lib/seo.ts` / `STUDIO_PROFILE` when props are omitted.
+ */
+import { SITE_URL, resolveDescription, resolveImage, resolveTitle } from "../lib/seo";
+import { STUDIO_PROFILE } from "../lib/types/content";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  canonicalURL?: string;
+  type?: string;
+  noindex?: boolean;
+}
+
+const { title, description, image, canonicalURL, type = "website", noindex = false } = Astro.props;
+
+const resolvedTitle = resolveTitle(title);
+const resolvedDescription = resolveDescription(description);
+const resolvedImage = resolveImage(image);
+
+const base = Astro.site ?? new URL(SITE_URL);
+const resolvedCanonical =
+  canonicalURL && canonicalURL.trim().length > 0
+    ? canonicalURL.trim()
+    : new URL(Astro.url.pathname, base).href;
+
+const robots = noindex ? "noindex, nofollow" : "index, follow";
+---
+
+<title>{resolvedTitle}</title>
+<meta name="description" content={resolvedDescription} />
+<meta name="robots" content={robots} />
+<link rel="canonical" href={resolvedCanonical} />
+
+<!-- OpenGraph -->
+<meta property="og:title" content={resolvedTitle} />
+<meta property="og:description" content={resolvedDescription} />
+<meta property="og:image" content={resolvedImage} />
+<meta property="og:type" content={type} />
+<meta property="og:url" content={resolvedCanonical} />
+<meta property="og:site_name" content={STUDIO_PROFILE.brand} />
+
+<!-- Twitter Cards -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={resolvedTitle} />
+<meta name="twitter:description" content={resolvedDescription} />
+<meta name="twitter:image" content={resolvedImage} />

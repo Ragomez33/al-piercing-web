@@ -117,6 +117,14 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   chrome.
 - The public footer renders on **public routes only**; `/admin` uses its own dashboard shell.
 
+### SEO & structured data (`SEO.astro`, `BaseLayout.astro`) — implemented (feature 014)
+- `<head>` metadata is owned by `SEO.astro` (mounted by `BaseLayout`): `title`, `description`, `robots`
+  (`index, follow`; `noindex` for `/admin`), an absolute canonical, OpenGraph and Twitter Cards, with
+  studio-wide defaults from the profile. This adds **no visual change** and **no client JavaScript**.
+- `BaseLayout` also emits a single JSON-LD `LocalBusiness` (`BeautySalon`/`TattooShop`) block built in
+  `src/lib/seo.ts`; `robots.txt` and `sitemap-index.xml` are generated at build (the admin area is
+  excluded). See `README.md` §SEO for details.
+
 ### Header (`AppHeader.astro`) — implemented
 - **Full-width sticky top bar (feature 010)**: `position: sticky; top: 0` at `--z-header`, spanning the
   full viewport width with a translucent dark surface (`--bg-navbar-glass`),

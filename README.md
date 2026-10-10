@@ -41,11 +41,14 @@ src/
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
 │   ├── catalog/ProductCard.svelte
 │   ├── catalog/CartDrawer.svelte
+│   ├── landing/LandingV2Tabs.svelte  # Island de pestañas de /landing-v2 (client:load)
 │   ├── team/TeamSection.svelte       # Island de la sección "Nuestro Equipo" (client:visible)
+│   ├── SEO.astro                     # Metadata <head> reutilizable (OG/Twitter/canonical/robots)
 │   └── ui/{AppHeader.astro,MobileNav.svelte}  # Header público + drawer hamburguesa (client:load)
-├── layouts/BaseLayout.astro
+├── layouts/BaseLayout.astro          # Incluye <SEO/> + JSON-LD LocalBusiness
 ├── lib/
-│   ├── config.ts                     # WhatsApp y datos de pago (env-overridable)
+│   ├── config.ts                     # WhatsApp, pagos y constantes SEO (env-overridable)
+│   ├── seo.ts                        # URL del sitio, defaults y builder JSON-LD LocalBusiness
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
@@ -53,7 +56,8 @@ src/
 │   ├── services/{booking,storage}.ts # Dominio (reservas) + subida de imágenes (producto/avatar)
 │   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/DataStore
 │   └── utils/{money,booking,dates,calendar}.ts
-├── pages/{index,catalog,booking,admin}.astro
+├── pages/{index,landing-v2,catalog,booking,admin}.astro
+├── pages/robots.txt.ts               # robots.txt generado (Sitemap absoluto desde SITE)
 ├── stores/cart.ts
 └── styles/tokens.css                # Única fuente de estilo (CSS Custom Properties)
 ```
@@ -78,6 +82,24 @@ es editar ese único archivo: los componentes consumen exclusivamente `var(--tok
 
 Antes de publicar, reemplaza el placeholder de WhatsApp en `src/lib/config.ts` (`WHATSAPP_PHONE`, solo
 dígitos con código de país).
+
+## SEO
+
+Metadatos y rastreo centralizados (feature 014), sin coste de runtime (todo se genera en el build):
+
+- **Metadata por página**: `src/components/SEO.astro` (usado por `BaseLayout.astro`) emite `title`,
+  `description`, `robots` (`index, follow`; `noindex` para `/admin`), canonical absoluto, **OpenGraph**
+  y **Twitter Cards**, con fallbacks desde `STUDIO_PROFILE` / `src/lib/config.ts`. Cada página pública
+  pasa su propia `title`/`description`.
+- **Datos estructurados**: `src/lib/seo.ts` construye un único JSON-LD `LocalBusiness`
+  (`BeautySalon`/`TattooShop`) con nombre, logo, imagen, teléfono, dirección, `priceRange: "$$"`,
+  `sameAs` (Instagram), horario y `potentialAction` de reserva; las coordenadas se incluyen solo si se
+  configuran.
+- **robots.txt**: generado por `src/pages/robots.txt.ts` (permite el sitio público, bloquea `/admin` y
+  referencia el sitemap con URL absoluta).
+- **Sitemap**: `@astrojs/sitemap` genera `sitemap-index.xml` en cada build y excluye `/admin`.
+- **URL base**: variable de entorno `SITE` (ej. `SITE=https://alpiercing.com`); alimenta canonical,
+  OpenGraph, JSON-LD, `robots.txt` y el sitemap. Fallback: `https://alpiercing.com`.
 
 ## Comandos
 
@@ -107,7 +129,9 @@ Salida estática (`dist/`). `vercel.json` y `netlify.toml` ya fueron preparados 
 autodetectan Astro).
 
 1. Copiar `.env.example` y completar las variables (en Vercel → *Project → Settings →
-   Environment Variables*; en Netlify → *Site configuration → Environment variables*).
+   Environment Variables*; en Netlify → *Site configuration → Environment variables*). Definí `SITE`
+   con la URL pública real para que canonical, OpenGraph, JSON-LD, `robots.txt` y el sitemap usen el
+   dominio correcto.
 2. Dejar `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY` **vacías** para el **Modo Demo**
    (persistencia en `localStorage` del navegador).
 3. Para **Modo Producción** con Supabase:

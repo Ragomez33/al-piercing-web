@@ -38,3 +38,51 @@ export const PAYMENT_BINANCE_PAY: PaymentChannel = {
  * read CSS custom properties; it mirrors `--bg-app-body` from tokens.css (metadata only).
  */
 export const THEME_COLOR = "#111113";
+
+// --- SEO / structured data (feature 014) ---------------------------------
+
+/** Default social preview / structured-data image (absolute-ized at render time). */
+export const DEFAULT_OG_IMAGE: string = BRAND_LOGO;
+
+/** Public Instagram profile (JSON-LD `sameAs`; mirrors the footer link). */
+export const INSTAGRAM_URL: string = "https://instagram.com/alpiercing";
+
+/** Structured postal address used by the `LocalBusiness` JSON-LD. */
+export interface BusinessAddress {
+  streetAddress: string;
+  addressLocality: string;
+  addressRegion: string;
+  postalCode: string;
+  addressCountry: string;
+}
+
+export const BUSINESS_ADDRESS: BusinessAddress = {
+  streetAddress: envString(import.meta.env.PUBLIC_BUSINESS_STREET, ""),
+  addressLocality: envString(import.meta.env.PUBLIC_BUSINESS_CITY, "Ciudad de México"),
+  addressRegion: envString(import.meta.env.PUBLIC_BUSINESS_REGION, "CDMX"),
+  postalCode: envString(import.meta.env.PUBLIC_BUSINESS_ZIP, ""),
+  addressCountry: envString(import.meta.env.PUBLIC_BUSINESS_COUNTRY, "MX"),
+};
+
+export interface GeoCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+function envNumber(value: unknown): number | null {
+  const parsed = typeof value === "string" && value.trim().length > 0 ? Number(value.trim()) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Optional coordinates; `null` (omitted from JSON-LD) unless both are configured. */
+export const BUSINESS_GEO: GeoCoordinates | null = (() => {
+  const latitude = envNumber(import.meta.env.PUBLIC_BUSINESS_LAT);
+  const longitude = envNumber(import.meta.env.PUBLIC_BUSINESS_LNG);
+  return latitude !== null && longitude !== null ? { latitude, longitude } : null;
+})();
+
+/** Business hours in schema.org format (e.g. `Mo-Sa 11:00-20:00`). */
+export const BUSINESS_OPENING_HOURS: string = "Mo-Sa 11:00-20:00";
+
+/** Price level indicator for the local business (`$$`). */
+export const BUSINESS_PRICE_RANGE: string = "$$";
