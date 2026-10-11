@@ -348,9 +348,42 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
 - **Mobile (<768px)**: the grid is replaced by a horizontally scrollable **day strip**
   (`overflow-x: auto`; the page never scrolls horizontally) plus the same **vertical day list**.
 - **Day detail (both)**: chronological appointments (`HH:mm`, client, service name, duration, status
-  badge, notes) and time blocks (dashed `--accent-wood` card); clicking an appointment opens the booking
-  detail modal (Aprobar / Reagendar / Cancelar — transitions still go through `services/booking.ts`), and
-  `[Nuevo bloqueo]` opens a slot + label + duration modal (`createBlock`/`deleteBlock`).
+  badge, notes) and **read-only availability block rows** (dashed `--accent-wood` card with range label or
+  "Día completo" badge). Clicking an appointment opens the booking detail modal
+  (Aprobar / Reagendar / Cancelar — transitions still go through `services/booking.ts`). Reagendar slot
+  lists are produced by the schedule-aware availability engine (`getDayAvailability`). Block creation and
+  deletion moved exclusively to the **Horarios** tab (feature 017) — the old fixed-slot block modal was
+  removed from the calendar.
+
+### Schedule & Availability Blocks (admin) — implemented (feature 017/018)
+- **Tab**: `?tab=schedule` "Horarios" (`AdminSchedule.svelte`, `client:load` island, `Clock` icon in the
+  sidebar between Calendario and Inventario), alongside `AdminCalendar`.
+- **Weekly schedule editor**: seven weekday rows (Lun→Dom) with an open/closed `role="switch"` as the only
+  per-row control — its time inputs are disabled while the day is closed and reactivate (restoring
+  previously saved hours, or defaults) when re-enabled. A single **"Guardar horario semanal"** button at
+  the bottom of the card persists the full seven-day schedule **atomically** via
+  `dataStore.updateSchedule(...)` (one batched upsert in production; a single storage write in demo),
+  validating all days together ("El cierre de [día] debe ser posterior a la apertura") and showing a brief
+  "Horario actualizado" notice with the button's inline loading state (feature-015 flicker-free pattern).
+- **Block manager**: two creation modes — **Rango de horas** (date + start + end) and **Días completos**
+  (start + end dates) — plus an optional Motivo. `end > start` is enforced at the UI and the data layer
+  ("El fin debe ser posterior al inicio"). A saved block that overlaps existing appointments shows a
+  non-blocking notice; it never auto-cancels (FR-011).
+- **Active block list**: every block as a row (range label or "Día completo" badge + reason) with a
+  confirmed delete dialog; deletions patch the list in place — no flicker. The list and schedule
+  live-refresh across tabs/devices via `subscribeToDataChanges(["blocks", "schedule"])`.
+
+### Availability Engine (public booking) — implemented (feature 017)
+- The offered slots on `/booking` are the intersection of the weekly **schedule** (working window),
+  **non-cancelled bookings** (with real service durations) and **range/full-day blocks** — computed by the
+  pure `src/lib/utils/availability.ts` engine behind the `getDayAvailability` domain service.
+- Closed days, full-day blocks and no-schedule days present an empty state ("No hay horarios disponibles
+  para esta fecha."); the page fails closed without a schedule (FR-004).
+- Submitting an unavailable slot is blocked and shows exactly
+  **"Este horario ya no se encuentra disponible"** — the same copy used by the duplicate-slot race mapping
+  (DB `23505` / local guard).
+- Live sync: `BookingFlow` subscribes to `["blocks", "bookings", "schedule"]`, refetches the current day
+  (debounced) and patches the grid in place without a reload; failures keep the last known availability.
 
 ### Appointment Rows (Admin) — planned
 - One-line compact rows per appointment: client, service, date/time, deposit status badge

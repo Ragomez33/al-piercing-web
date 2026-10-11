@@ -9,6 +9,7 @@
 import { DataError, dataStore } from "../data/store";
 import type { Booking, NewBookingInput } from "../types/domain";
 import { buildBookingConfirmationLink, buildBookingNoticeLink } from "../utils/booking";
+import { isSlotBookable } from "./availability";
 
 /** Result of persisting a public booking request. */
 export interface SubmitBookingResult {
@@ -33,15 +34,34 @@ async function findBooking(id: string): Promise<Booking | undefined> {
 
 /**
  * Persists a new request as `PENDING` and returns it with the client notice link.
- * Slot exclusivity is enforced by the data layer (DB partial unique index /
- * local adapter guard); failures surface as typed `DataError` (FR-001/FR-007).
+ *
+ * Strict availability re-validation (feature 017 FR-014): between rendering and
+ * submitting, the slot may have become covered by a block, out of hours, or taken
+ * by another request. When it is no longer bookable we throw BEFORE persisting with
+ * the exact user-facing copy. The persistent race (DB partial unique index / local
+ * adapter guard) maps to the same message at the data layer (research R4).
  */
 export async function submitBookingRequest(
   input: NewBookingInput,
   phone: string,
 ): Promise<SubmitBookingResult> {
+  const durationMinutes = await resolveServiceDuration(input.serviceId);
+  const bookable = await isSlotBookable(input.date, input.timeSlot, durationMinutes);
+  if (!bookable) {
+    throw new DataError("Este horario ya no se encuentra disponible");
+  }
   const booking = await dataStore.createBooking(input);
   return { booking, noticeUrl: buildBookingNoticeLink(booking, phone) };
+}
+
+async function resolveServiceDuration(serviceId: string): Promise<number> {
+  try {
+    const services = await dataStore.listServices({ includeInactive: true });
+    const match = services.find((service) => service.id === serviceId);
+    return match?.durationMinutes ?? 30;
+  } catch {
+    return 30;
+  }
 }
 
 /**

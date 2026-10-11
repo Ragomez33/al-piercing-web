@@ -4,29 +4,39 @@
  */
 import {
   DataError,
+  type AvailabilityBlock,
   type Booking,
   type BookingStatus,
   type DataStore,
   type GalleryItemRecord,
-  type NewBlockInput,
+  type NewAvailabilityBlockInput,
   type NewBookingInput,
   type NewGalleryItemInput,
   type NewProductInput,
   type NewTeamMemberInput,
   type ProductRecord,
   type SchedulePatch,
+  type StudioSchedule,
+  type StudioScheduleDay,
   type TeamMember,
-  type TimeBlock,
 } from "../../types/domain";
+import { WEEKDAY_ORDER } from "../../types/domain";
 import { PRODUCTS } from "../../types/content";
 import { calcDepositCents } from "../../utils/money";
+import {
+  blockOverlapsDay,
+  validateBlockInput,
+  validateScheduleDayPatch,
+} from "../../utils/availability";
 import { GALLERY_SEED } from "../gallery";
 import { PIERCING_SERVICES, type NewServiceInput, type PiercingService } from "../services";
+import { DEFAULT_SCHEDULE_SEED } from "../schedule";
 import { TEAM_MEMBERS } from "../team";
 
 const BOOKINGS_KEY = "alpi:bookings:v1";
 const PRODUCTS_KEY = "alpi:products:v1";
-const BLOCKS_KEY = "alpi:timeblocks:v1";
+const AVAILABILITY_BLOCKS_KEY = "alpi:availabilityblocks:v1";
+const SCHEDULE_KEY = "alpi:studioschedule:v1";
 const SERVICES_KEY = "alpi:services:v1";
 const TEAM_KEY = "alpi:team:v1";
 const GALLERY_KEY = "alpi:gallery:v1";
@@ -43,8 +53,16 @@ function seedBookings(): Booking[] {
   return [];
 }
 
-function seedBlocks(): TimeBlock[] {
+function seedAvailabilityBlocks(): AvailabilityBlock[] {
   return [];
+}
+
+function seedSchedule(): StudioSchedule {
+  return DEFAULT_SCHEDULE_SEED.map((day) => ({
+    ...day,
+    openTime: day.openTime,
+    closeTime: day.closeTime,
+  }));
 }
 
 function seedProducts(): ProductRecord[] {
@@ -181,15 +199,32 @@ function validateTeamMember(input: NewTeamMemberInput): void {
   }
 }
 
-function isTimeBlock(value: unknown): value is TimeBlock {
+function isAvailabilityBlock(value: unknown): value is AvailabilityBlock {
   if (!isRecord(value)) return false;
-  const duration = value.durationMinutes;
   return (
     typeof value.id === "string" &&
-    typeof value.date === "string" &&
-    typeof value.timeSlot === "string" &&
-    (duration === 15 || duration === 30 || duration === 60 || duration === 90 || duration === 120) &&
-    typeof value.label === "string"
+    typeof value.startDatetime === "string" &&
+    typeof value.endDatetime === "string" &&
+    typeof value.reason === "string" &&
+    typeof value.isFullDay === "boolean" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isStudioScheduleDay(value: unknown): value is StudioScheduleDay {
+  if (!isRecord(value)) return false;
+  const weekday = value.weekday;
+  return (
+    (weekday === "sun" ||
+      weekday === "mon" ||
+      weekday === "tue" ||
+      weekday === "wed" ||
+      weekday === "thu" ||
+      weekday === "fri" ||
+      weekday === "sat") &&
+    typeof value.isOpen === "boolean" &&
+    (value.openTime === null || typeof value.openTime === "string") &&
+    (value.closeTime === null || typeof value.closeTime === "string")
   );
 }
 
@@ -301,7 +336,7 @@ export function createLocalAdapter(): DataStore {
           booking.timeSlot === input.timeSlot &&
           (booking.status === "PENDING" || booking.status === "CONFIRMED"),
       );
-      if (taken) throw new DataError("Ese horario ya fue solicitado. Elegí otro horario.");
+      if (taken) throw new DataError("Este horario ya no se encuentra disponible");
       const record: Booking = {
         id: newId(),
         createdAt: new Date().toISOString(),
@@ -331,33 +366,37 @@ export function createLocalAdapter(): DataStore {
       return updated;
     },
 
-    async getBookedSlots(date: string): Promise<string[]> {
-      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking);
-      return bookings
-        .filter(
-          (booking) =>
-            booking.date === date &&
-            (booking.status === "PENDING" || booking.status === "CONFIRMED"),
-        )
-        .map((booking) => booking.timeSlot);
+    async listBlocks(input): Promise<AvailabilityBlock[]> {
+      const blocks = await readArray(AVAILABILITY_BLOCKS_KEY, seedAvailabilityBlocks(), isAvailabilityBlock);
+      if (!input?.date) return blocks;
+      return blocks.filter((block) => blockOverlapsDay(block, input.date!));
     },
 
-    async listBlocks(input): Promise<TimeBlock[]> {
-      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
-      return input?.date ? blocks.filter((block) => block.date === input.date) : blocks;
-    },
-
-    async createBlock(input: NewBlockInput): Promise<TimeBlock> {
-      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
-      const record: TimeBlock = { ...input, id: newId() };
-      await writeArray(BLOCKS_KEY, [...blocks, record]);
+    async createBlock(input: NewAvailabilityBlockInput): Promise<AvailabilityBlock> {
+      const invalid = validateBlockInput({
+        startDatetime: input.startDatetime,
+        endDatetime: input.endDatetime,
+      });
+      if (invalid) throw new DataError(invalid);
+      const blocks = await readArray(AVAILABILITY_BLOCKS_KEY, seedAvailabilityBlocks(), isAvailabilityBlock);
+      const record: AvailabilityBlock = {
+        id: newId(),
+        startDatetime: input.startDatetime,
+        endDatetime: input.endDatetime,
+        reason: input.reason?.trim() ?? "",
+        isFullDay: input.isFullDay ?? false,
+        createdAt: new Date().toISOString(),
+      };
+      await writeArray(AVAILABILITY_BLOCKS_KEY, [...blocks, record]);
       return record;
     },
 
     async deleteBlock(id: string): Promise<void> {
-      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
-      const next = blocks.filter((block) => block.id !== id);
-      await writeArray(BLOCKS_KEY, next);
+      const blocks = await readArray(AVAILABILITY_BLOCKS_KEY, seedAvailabilityBlocks(), isAvailabilityBlock);
+      await writeArray(
+        AVAILABILITY_BLOCKS_KEY,
+        blocks.filter((block) => block.id !== id),
+      );
     },
 
     async updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking> {
@@ -373,9 +412,51 @@ export function createLocalAdapter(): DataStore {
       return updated;
     },
 
-    async getBlockedSlots(date: string): Promise<string[]> {
-      const blocks = await readArray(BLOCKS_KEY, seedBlocks(), isTimeBlock);
-      return blocks.filter((block) => block.date === date).map((block) => block.timeSlot);
+    async getSchedule(): Promise<StudioSchedule> {
+      const days = await readArray(SCHEDULE_KEY, seedSchedule(), isStudioScheduleDay);
+      // Normalize: exactly the seven weekdays in `sun..sat` order; any missing
+      // weekday is treated as closed so the engine always has a full view.
+      const byWeekday = new Map(days.map((day) => [day.weekday, day]));
+      return WEEKDAY_ORDER.map((weekday) => {
+        const existing = byWeekday.get(weekday);
+        return (
+          existing ?? {
+            weekday,
+            isOpen: false,
+            openTime: null,
+            closeTime: null,
+          }
+        );
+      });
+    },
+
+    async updateSchedule(input: StudioSchedule): Promise<StudioSchedule> {
+      // Validate every day up-front so a single failed day rejects the whole
+      // batch without writing anything (atomic parity with the DB upsert).
+      for (const day of input) {
+        const invalid = validateScheduleDayPatch({
+          isOpen: day.isOpen,
+          openTime: day.openTime,
+          closeTime: day.closeTime,
+        });
+        if (invalid) throw new DataError(invalid);
+      }
+      // Normalize to exactly seven days in stable order; closed days store null times.
+      const byWeekday = new Map(input.map((day) => [day.weekday, day]));
+      const full: StudioSchedule = WEEKDAY_ORDER.map((name) => {
+        const existing = byWeekday.get(name);
+        if (!existing) {
+          return { weekday: name, isOpen: false, openTime: null, closeTime: null };
+        }
+        return {
+          weekday: name,
+          isOpen: existing.isOpen,
+          openTime: existing.isOpen ? existing.openTime : null,
+          closeTime: existing.isOpen ? existing.closeTime : null,
+        };
+      });
+      await writeArray(SCHEDULE_KEY, full);
+      return full;
     },
 
     async listTeamMembers(input): Promise<TeamMember[]> {

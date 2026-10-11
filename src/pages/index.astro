@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import TeamSection from "../components/team/TeamSection.svelte";
 import LandingGallery from "../components/landing/LandingGallery.svelte";
+import StudioStatusBadge from "../components/landing/StudioStatusBadge.svelte";
 import { PROCESS_STEPS, STUDIO_PROFILE } from "../lib/types/content";
 import { PIERCING_SERVICE_CATEGORIES } from "../lib/data/services";
 import { dataStore, listFallbackServices } from "../lib/data/store";
@@ -101,6 +102,12 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
 
   <!-- Team: active artists/staff from the managed data source (feature 012, US1) -->
   <TeamSection client:visible />
+
+  <!-- Opening hours: live status badge fed by studio_schedule + blocks (feature 018) -->
+  <section class="hours-strip" aria-labelledby="hours-title">
+    <h2 id="hours-title">Horario de atención</h2>
+    <StudioStatusBadge client:load />
+  </section>
 </BaseLayout>
 
 <style>
@@ -367,6 +374,23 @@ const serviceGroups = PIERCING_SERVICE_CATEGORIES.map((category) => ({
 
   .book-link {
     margin: 1.75rem auto 0;
+  }
+
+  .hours-strip {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .hours-strip h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-primary);
   }
 
   .process {

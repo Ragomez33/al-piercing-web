@@ -6,44 +6,61 @@
  */
 import {
   DataError,
+  type AvailabilityBlock,
   type Booking,
   type BookingStatus,
   type DataMode,
   type DataStore,
   type GalleryItemRecord,
-  type NewBlockInput,
+  type NewAvailabilityBlockInput,
   type NewBookingInput,
   type NewGalleryItemInput,
   type NewProductInput,
   type NewTeamMemberInput,
   type ProductRecord,
   type SchedulePatch,
+  type StudioSchedule,
+  type StudioScheduleDay,
   type TeamMember,
-  type TimeBlock,
 } from "../../types/domain";
+import { WEEKDAY_BY_INDEX, WEEKDAY_ORDER } from "../../types/domain";
 import type { Database } from "../../../types/supabase";
 import { calcDepositCents } from "../../utils/money";
+import {
+  blockOverlapsDay,
+  validateBlockInput,
+  validateScheduleDayPatch,
+} from "../../utils/availability";
 import type { NewServiceInput, PiercingService } from "../services";
 import { getSupabaseClient } from "../supabase-client";
 
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
-type TimeBlockRow = Database["public"]["Tables"]["time_blocks"]["Row"];
+type AvailabilityBlockRow = Database["public"]["Tables"]["availability_blocks"]["Row"];
+type ScheduleDayRow = Database["public"]["Tables"]["studio_schedule"]["Row"];
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type TeamRow = Database["public"]["Tables"]["team_members"]["Row"];
 type GalleryRow = Database["public"]["Tables"]["gallery_items"]["Row"];
 
-function toTimeBlock(row: TimeBlockRow): TimeBlock {
-  const duration = row.duration_minutes;
-  if (duration !== 15 && duration !== 30 && duration !== 60 && duration !== 90 && duration !== 120) {
-    throw new DataError(`Duración de bloqueo inválida: ${duration}`);
-  }
+function toAvailabilityBlock(row: AvailabilityBlockRow): AvailabilityBlock {
   return {
     id: row.id,
-    date: row.block_date,
-    timeSlot: row.time_slot,
-    durationMinutes: duration,
-    label: row.label,
+    startDatetime: row.start_datetime,
+    endDatetime: row.end_datetime,
+    reason: row.reason,
+    isFullDay: row.is_full_day,
+    createdAt: row.created_at,
+  };
+}
+
+function toStudioScheduleDay(row: ScheduleDayRow): StudioScheduleDay {
+  const weekday = WEEKDAY_BY_INDEX[row.weekday] ?? "sun";
+  return {
+    weekday,
+    isOpen: row.is_open,
+    // Normalize Postgres `time` ("11:00:00") to the domain "HH:mm".
+    openTime: row.open_time ? row.open_time.slice(0, 5) : null,
+    closeTime: row.close_time ? row.close_time.slice(0, 5) : null,
   };
 }
 
@@ -135,13 +152,14 @@ function toGalleryItem(row: GalleryRow): GalleryItemRecord {
 }
 
 /**
- * Maps Postgres errors to typed, user-facing `DataError`s (feature 009).
+ * Maps Postgres errors to typed, user-facing `DataError`s (feature 009/017).
  * A unique-violation (`23505`) on the active-slot partial index becomes the
- * friendly duplicate-slot message (research R7, FR-007/FR-012).
+ * friendly unavailable-slot message — identical copy to the booking guard
+ * (research R4, FR-014/FR-015).
  */
 function toDataError(error: { message: string; code?: string }): DataError {
   if (error.code === "23505") {
-    return new DataError("Ese horario ya fue solicitado. Elegí otro horario.");
+    return new DataError("Este horario ya no se encuentra disponible");
   }
   return new DataError(error.message);
 }
@@ -281,41 +299,91 @@ export function createSupabaseAdapter(): DataStore {
       return toBooking(requireRow(data, "La reserva"));
     },
 
-    async getBookedSlots(date: string): Promise<string[]> {
+    async listBlocks(input): Promise<AvailabilityBlock[]> {
       const client = getSupabaseClient();
       const { data, error } = await client
-        .from("bookings")
-        .select("time_slot")
-        .eq("booking_date", date)
-        .in("status", ["PENDING", "CONFIRMED"]);
+        .from("availability_blocks")
+        .select("*")
+        .order("start_datetime", { ascending: true });
       if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => row.time_slot);
+      const all = (data ?? []).map((row) => toAvailabilityBlock(row));
+      if (!input?.date) return all;
+      return all.filter((block) => blockOverlapsDay(block, input.date!));
     },
 
-    async listBlocks(input): Promise<TimeBlock[]> {
-      const client = getSupabaseClient();
-      let query = client.from("time_blocks").select("*").order("block_date").order("time_slot");
-      if (input?.date) query = query.eq("block_date", input.date);
-      const { data, error } = await query;
-      if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => toTimeBlock(row));
-    },
-
-    async createBlock(input: NewBlockInput): Promise<TimeBlock> {
+    async createBlock(input: NewAvailabilityBlockInput): Promise<AvailabilityBlock> {
+      const invalid = validateBlockInput({
+        startDatetime: input.startDatetime,
+        endDatetime: input.endDatetime,
+      });
+      if (invalid) throw new DataError(invalid);
       const client = getSupabaseClient();
       const { data, error } = await client
-        .from("time_blocks")
-        .insert({ block_date: input.date, time_slot: input.timeSlot, duration_minutes: input.durationMinutes, label: input.label })
+        .from("availability_blocks")
+        .insert({
+          start_datetime: input.startDatetime,
+          end_datetime: input.endDatetime,
+          reason: input.reason?.trim() ?? "",
+          is_full_day: input.isFullDay ?? false,
+        })
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toTimeBlock(requireRow(data, "El bloqueo"));
+      return toAvailabilityBlock(requireRow(data, "El bloqueo"));
     },
 
     async deleteBlock(id: string): Promise<void> {
       const client = getSupabaseClient();
-      const { error } = await client.from("time_blocks").delete().eq("id", id);
+      const { error } = await client.from("availability_blocks").delete().eq("id", id);
       if (error) throw new DataError(error.message);
+    },
+
+    async getSchedule(): Promise<StudioSchedule> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("studio_schedule")
+        .select("*")
+        .order("weekday", { ascending: true });
+      if (error) throw new DataError(error.message);
+      const rows = (data ?? []).map((row) => toStudioScheduleDay(row));
+      // Normalize: exactly the seven weekdays in `sun..sat` order; any missing
+      // weekday is treated as closed so the engine always has a full view.
+      const byWeekday = new Map(rows.map((day) => [day.weekday, day]));
+      return WEEKDAY_ORDER.map((weekday) => {
+        const existing = byWeekday.get(weekday);
+        return (
+          existing ?? {
+            weekday,
+            isOpen: false,
+            openTime: null,
+            closeTime: null,
+          }
+        );
+      });
+    },
+
+    async updateSchedule(input: StudioSchedule): Promise<StudioSchedule> {
+      // Validate the whole batch up-front; the single upsert below is atomic.
+      for (const day of input) {
+        const invalid = validateScheduleDayPatch({
+          isOpen: day.isOpen,
+          openTime: day.openTime,
+          closeTime: day.closeTime,
+        });
+        if (invalid) throw new DataError(invalid);
+      }
+      const client = getSupabaseClient();
+      const rows = input.map((day) => ({
+        weekday: WEEKDAY_ORDER.indexOf(day.weekday),
+        is_open: day.isOpen,
+        open_time: day.isOpen ? day.openTime : null,
+        close_time: day.isOpen ? day.closeTime : null,
+      }));
+      const { error } = await client.from("studio_schedule").upsert(rows, {
+        onConflict: "weekday",
+      });
+      if (error) throw new DataError(error.message);
+      return this.getSchedule();
     },
 
     async updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking> {
@@ -328,13 +396,6 @@ export function createSupabaseAdapter(): DataStore {
         .single();
       if (error) throw toDataError(error);
       return toBooking(requireRow(data, "La reserva"));
-    },
-
-    async getBlockedSlots(date: string): Promise<string[]> {
-      const client = getSupabaseClient();
-      const { data, error } = await client.from("time_blocks").select("time_slot").eq("block_date", date);
-      if (error) throw new DataError(error.message);
-      return (data ?? []).map((row) => row.time_slot);
     },
 
     async listTeamMembers(input): Promise<TeamMember[]> {

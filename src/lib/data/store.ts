@@ -3,7 +3,7 @@
  * Selects the adapter once at module init based on the presence of public Supabase
  * environment variables; every module reads/writes through this facade.
  */
-import type { DataMode, DataStore, GalleryItemRecord, TeamMember } from "../types/domain";
+import type { DataMode, DataStore, GalleryItemRecord, StudioSchedule, TeamMember } from "../types/domain";
 import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
@@ -79,6 +79,36 @@ function withChangeNotifications(adapter: DataStore): DataStore {
       await adapter.deleteGalleryItem(id);
       publishDataChange("gallery");
     },
+    // --- Availability (feature 017): blocks, bookings and schedule change live. ---
+    async createBlock(input) {
+      const record = await adapter.createBlock(input);
+      publishDataChange("blocks");
+      return record;
+    },
+    async deleteBlock(id) {
+      await adapter.deleteBlock(id);
+      publishDataChange("blocks");
+    },
+    async updateSchedule(input) {
+      const schedule = await adapter.updateSchedule(input);
+      publishDataChange("schedule");
+      return schedule;
+    },
+    async createBooking(input) {
+      const record = await adapter.createBooking(input);
+      publishDataChange("bookings");
+      return record;
+    },
+    async updateBookingStatus(id, status) {
+      const record = await adapter.updateBookingStatus(id, status);
+      publishDataChange("bookings");
+      return record;
+    },
+    async updateBookingSchedule(id, patch) {
+      const record = await adapter.updateBookingSchedule(id, patch);
+      publishDataChange("bookings");
+      return record;
+    },
   };
 }
 
@@ -115,4 +145,13 @@ export async function listFallbackTeamMembers(): Promise<TeamMember[]> {
  */
 export async function listFallbackGalleryItems(): Promise<GalleryItemRecord[]> {
   return createLocalAdapter().listGalleryItems();
+}
+
+/**
+ * Demo-seed studio schedule served by the local adapter. Used as a non-blocking
+ * fallback when a live `getSchedule()` read fails (feature 017); components
+ * never import the hardcoded seed directly.
+ */
+export async function listFallbackSchedule(): Promise<StudioSchedule> {
+  return createLocalAdapter().getSchedule();
 }

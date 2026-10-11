@@ -57,20 +57,76 @@ export interface NewProductInput {
   image: string;
 }
 
-/** Manual unavailability block created by the operator (feature 006). */
-export interface TimeBlock {
+/** Weekday name matching `Date#getDay()` indexing (0 = Sunday). */
+export type Weekday = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat";
+
+/** Stable weekday order; index == `Date#getDay()` (0 = Sunday). */
+export const WEEKDAY_ORDER: readonly Weekday[] = [
+  "sun",
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+];
+
+/** Maps a `Date#getDay()` index (0=Sunday…6=Saturday) to its weekday name. */
+export const WEEKDAY_BY_INDEX: Record<number, Weekday> = Object.fromEntries(
+  WEEKDAY_ORDER.map((weekday, index) => [index, weekday]),
+) as Record<number, Weekday>;
+
+/**
+ * Range-based unavailability block created by the operator (feature 017).
+ * Covers the half-open interval `[startDatetime, endDatetime)`; `isFullDay`
+ * marks a full-day range (start/end local dates inclusive, end exclusive next
+ * day).
+ */
+export interface AvailabilityBlock {
   id: string;
-  date: string; // local ISO yyyy-mm-dd
-  timeSlot: string; // HH:mm within the calendar window
-  durationMinutes: number; // 15 | 30 | 60 | 90 | 120
-  label: string; // non-empty (e.g. "Almuerzo", "Personal")
+  /** ISO instant with local offset (`timestamptz`). */
+  startDatetime: string;
+  /** ISO instant with local offset; strictly after `startDatetime`. */
+  endDatetime: string;
+  /** Free-text reason; trimmed, may be "". */
+  reason: string;
+  /** false → time-range block; true → full-day range (feature 017). */
+  isFullDay: boolean;
+  createdAt: string; // ISO
 }
 
-export interface NewBlockInput {
-  date: string;
-  timeSlot: string;
-  durationMinutes: number;
-  label: string;
+export interface NewAvailabilityBlockInput {
+  startDatetime: string;
+  endDatetime: string;
+  reason?: string;
+  /** Defaults to false. */
+  isFullDay?: boolean;
+}
+
+/** One weekday of the studio's recurring schedule; `null` times → closed when `isOpen` false. */
+export interface StudioScheduleDay {
+  weekday: Weekday;
+  isOpen: boolean;
+  /**
+   * Opening time `HH:mm`, REQUIRED (non-null) when `isOpen === true`.
+   * Must be strictly before `closeTime` when open.
+   */
+  openTime: string | null;
+  /**
+   * Closing time `HH:mm`, REQUIRED (non-null) when `isOpen === true`.
+   * Must be strictly after `openTime` when open.
+   */
+  closeTime: string | null;
+}
+
+/** The seven weekdays in stable order (`sun..sat`). */
+export type StudioSchedule = StudioScheduleDay[];
+
+/** Patch for one weekday row; persisted/validated by the data source. */
+export interface UpdateScheduleDayInput {
+  isOpen: boolean;
+  openTime: string | null;
+  closeTime: string | null;
 }
 
 /** Date/time change for `[Reagendar]` (target must be free). */
@@ -153,15 +209,16 @@ export interface DataStore {
   listBookings(input?: { date?: string }): Promise<Booking[]>;
   createBooking(input: NewBookingInput): Promise<Booking>;
   updateBookingStatus(id: string, status: BookingStatus): Promise<Booking>;
-  getBookedSlots(date: string): Promise<string[]>;
-  /** Manual unavailability blocks (feature 006). */
-  listBlocks(input?: { date?: string }): Promise<TimeBlock[]>;
-  createBlock(input: NewBlockInput): Promise<TimeBlock>;
+  /** Manual unavailability blocks (feature 017). Range-based `[start, end)`. */
+  listBlocks(input?: { date?: string }): Promise<AvailabilityBlock[]>;
+  createBlock(input: NewAvailabilityBlockInput): Promise<AvailabilityBlock>;
   deleteBlock(id: string): Promise<void>;
   /** Moves a booking to a new exclusive date/time slot (feature 006). */
   updateBookingSchedule(id: string, patch: SchedulePatch): Promise<Booking>;
-  /** timeSlot values manually blocked for a date (public availability). */
-  getBlockedSlots(date: string): Promise<string[]>;
+  /** The studio's recurring weekly schedule (feature 017), `sun..sat` in order. */
+  getSchedule(): Promise<StudioSchedule>;
+  /** Atomically persists the FULL seven-day schedule; returns it normalized (feature 018). */
+  updateSchedule(input: StudioSchedule): Promise<StudioSchedule>;
   /** Team / staff roster (feature 012). Without options → active only (public). */
   listTeamMembers(input?: { includeInactive?: boolean }): Promise<TeamMember[]>;
   createTeamMember(input: NewTeamMemberInput): Promise<TeamMember>;

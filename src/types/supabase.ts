@@ -1,12 +1,15 @@
 /**
  * Clean Supabase Database types for ALPIERCING.
  *
- * Mirrors the SQL applied to the Supabase project (migrations 0001–0006):
+ * Mirrors the SQL applied to the Supabase project (migrations 0001–0008):
  *   - bookings     (booking_date, time_slot, …)
  *   - products     (category, price_cents, stock, published, …)
- *   - time_blocks  (block_date, time_slot, duration_minutes, label)
+ *   - time_blocks  (legacy fixed-slot blocks — table kept, no code reads it since 017)
  *   - services     (category, price_cents, duration_minutes, active, …)
  *   - team_members (name, role, avatar_url, bio, instagram_handle, is_active)
+ *   - gallery_items (title, category, image_url, is_active, created_at)
+ *   - availability_blocks (start_datetime, end_datetime, reason, is_full_day)
+ *   - studio_schedule (weekday, is_open, open_time, close_time)
  *
  * Regenerate with the Supabase CLI once an access token is available:
  *   SUPABASE_ACCESS_TOKEN=... supabase gen types typescript --project-id <ref> > src/types/supabase.ts
@@ -225,6 +228,54 @@ export interface Database {
           image_url?: string;
           is_active?: boolean;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      availability_blocks: {
+        Row: {
+          id: string;
+          created_at: string;
+          start_datetime: string;
+          end_datetime: string;
+          reason: string;
+          is_full_day: boolean;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          start_datetime: string;
+          end_datetime: string;
+          reason?: string;
+          is_full_day?: boolean;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          start_datetime?: string;
+          end_datetime?: string;
+          reason?: string;
+          is_full_day?: boolean;
+        };
+        Relationships: [];
+      };
+      studio_schedule: {
+        Row: {
+          weekday: number;
+          is_open: boolean;
+          open_time: string | null;
+          close_time: string | null;
+        };
+        Insert: {
+          weekday: number;
+          is_open?: boolean;
+          open_time?: string | null;
+          close_time?: string | null;
+        };
+        Update: {
+          weekday?: number;
+          is_open?: boolean;
+          open_time?: string | null;
+          close_time?: string | null;
         };
         Relationships: [];
       };

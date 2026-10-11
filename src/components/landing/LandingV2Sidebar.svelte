@@ -1,19 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { BRAND_LOGO } from "../../lib/config";
   import { STUDIO_PROFILE } from "../../lib/types/content";
-  import { DEFAULT_BUSINESS_HOURS, getOpenStatus, type OpenStatus } from "../../lib/utils/hours";
-
-  let status = $state<OpenStatus>(getOpenStatus(DEFAULT_BUSINESS_HOURS, new Date()));
-
-  onMount(() => {
-    const tick = () => {
-      status = getOpenStatus(DEFAULT_BUSINESS_HOURS, new Date());
-    };
-    tick();
-    const timer = setInterval(tick, 60_000);
-    return () => clearInterval(timer);
-  });
+  import StudioStatusBadge from "./StudioStatusBadge.svelte";
 </script>
 
 <section class="card" aria-label="Resumen del estudio">
@@ -30,10 +18,7 @@
     </div>
   </div>
 
-  <p class="status" class:open={status.open}>
-    <span class="status-dot" aria-hidden="true"></span>
-    {status.label}
-  </p>
+  <StudioStatusBadge />
 
   <p class="address">📍 {STUDIO_PROFILE.location}</p>
 
@@ -81,28 +66,6 @@
     letter-spacing: 0.06em;
     color: var(--text-gold);
     overflow-wrap: anywhere;
-  }
-
-  .status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin: 0;
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-  }
-
-  .status.open {
-    color: var(--accent-primary);
-  }
-
-  .status-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: currentColor;
-    flex: 0 0 auto;
   }
 
   .address {

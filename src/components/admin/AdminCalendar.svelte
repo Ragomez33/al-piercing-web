@@ -1,32 +1,29 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ChevronLeft, ChevronRight, Plus, X } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight } from "lucide-svelte";
   import { DataError, dataStore } from "../../lib/data/store";
   import { approveBooking, cancelBooking } from "../../lib/services/booking";
+  import { getDayAvailability } from "../../lib/services/availability";
   import { buildBookingConfirmationLink } from "../../lib/utils/booking";
   import { WHATSAPP_PHONE } from "../../lib/config";
   import { localISODate } from "../../lib/utils/dates";
-  import type { Booking, BookingStatus, TimeBlock } from "../../lib/types/domain";
+  import { blockOverlapsDay, localDateFromISO, localTimeFromISO } from "../../lib/utils/availability";
+  import type { Booking, BookingStatus, AvailabilityBlock } from "../../lib/types/domain";
   import {
     addMonths,
-    buildOccupancies,
-    calendarRows,
     dayStatusSummary,
-    isBusy,
     monthGrid,
     monthLabel,
     startOfMonth,
-    type Occupancy,
   } from "../../lib/utils/calendar";
   import { formatCents } from "../../lib/utils/money";
 
-  const slots = calendarRows();
   const WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
 
   let monthStart = $state(startOfMonth(new Date()));
   let selectedDate = $state<string>(localISODate(new Date()));
   let bookings = $state<Booking[]>([]);
-  let blocks = $state<TimeBlock[]>([]);
+  let blocks = $state<AvailabilityBlock[]>([]);
   let durations = $state<Record<string, number>>({});
   let loading = $state(false);
   let calError = $state("");
@@ -47,14 +44,6 @@
     CANCELLED: "Cancelado",
   };
 
-  // Block create / manage modals
-  let creating = $state(false);
-  let nbTime = $state("");
-  let nbLabel = $state("Almuerzo");
-  let nbDuration = $state<number>(30);
-  let creatingError = $state("");
-  let managing = $state<TimeBlock | null>(null);
-
   const cells = $derived(monthGrid(monthStart));
   const monthCells = $derived(cells.filter((cell) => cell.inMonth));
   const monthTitle = $derived(monthLabel(monthStart));
@@ -65,8 +54,8 @@
   );
   const selectedBlocks = $derived(
     blocks
-      .filter((block) => block.date === selectedDate)
-      .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot)),
+      .filter((block) => blockOverlapsDay(block, selectedDate))
+      .sort((a, b) => a.startDatetime.localeCompare(b.startDatetime)),
   );
 
   function dateFromISO(iso: string): Date {
@@ -90,6 +79,27 @@
   function durationFor(serviceId: string | null): number {
     if (!serviceId) return 30;
     return durations[serviceId] ?? 30;
+  }
+
+  // Read-only block row labels (feature 017). Full-day end_datetime is exclusive.
+  function fullDayEndLabel(block: AvailabilityBlock): string {
+    const end = new Date(new Date(block.endDatetime).getTime() - 24 * 60 * 60 * 1000);
+    const y = end.getFullYear();
+    const m = String(end.getMonth() + 1).padStart(2, "0");
+    const d = String(end.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function blockTimeLabel(block: AvailabilityBlock): string {
+    if (block.isFullDay) return "Todo el día";
+    return `${localTimeFromISO(block.startDatetime)} – ${localTimeFromISO(block.endDatetime)}`;
+  }
+
+  function blockLabel(block: AvailabilityBlock): string {
+    if (block.isFullDay) {
+      return `Bloqueo día completo ${localDateFromISO(block.startDatetime)} al ${fullDayEndLabel(block)}`;
+    }
+    return `Bloqueo ${localDateFromISO(block.startDatetime)} ${blockTimeLabel(block)} ${block.reason}`;
   }
 
   async function reload() {
@@ -128,21 +138,6 @@
 
   function selectDay(date: string) {
     selectedDate = date;
-  }
-
-  function occupanciesFor(date: string, excludeId?: string): Occupancy[] {
-    return buildOccupancies(
-      bookings.map((booking) => ({
-        id: booking.id,
-        date: booking.date,
-        timeSlot: booking.timeSlot,
-        status: booking.status,
-        durationMinutes: durationFor(booking.serviceId),
-      })),
-      blocks,
-      date,
-      excludeId,
-    );
   }
 
   function openBooking(booking: Booking) {
@@ -203,14 +198,19 @@
     rebuildReSlots();
   }
 
-  function rebuildReSlots() {
+  async function rebuildReSlots() {
     if (!selected || !reDate) {
       reSlots = [];
       return;
     }
-    const occ = occupanciesFor(reDate, selected.id);
-    const dur = durationFor(selected.serviceId);
-    reSlots = slots.filter((slot) => !isBusy(occ, slot, dur));
+    // Feature 017: schedule-aware availability — honours working hours and
+    // range/full-day blocks, excluding the booking being moved.
+    try {
+      const availability = await getDayAvailability(reDate, durationFor(selected.serviceId), selected.id);
+      reSlots = availability.slots;
+    } catch {
+      reSlots = [];
+    }
   }
 
   async function applyReschedule(slot: string) {
@@ -223,47 +223,6 @@
       await reload();
     } catch (err) {
       actionError = err instanceof DataError ? err.message : "No se pudo reagendar";
-    }
-  }
-
-  // --- Block actions ---
-  function openCreateBlock() {
-    nbTime = slots[0] ?? "09:00";
-    nbLabel = "Almuerzo";
-    nbDuration = 30;
-    creatingError = "";
-    creating = true;
-  }
-
-  async function submitBlock() {
-    if (!nbTime || !nbLabel.trim()) {
-      creatingError = "Completá la etiqueta del bloqueo";
-      return;
-    }
-    creatingError = "";
-    try {
-      await dataStore.createBlock({
-        date: selectedDate,
-        timeSlot: nbTime,
-        durationMinutes: nbDuration,
-        label: nbLabel.trim(),
-      });
-      creating = false;
-      await reload();
-    } catch (err) {
-      creatingError = err instanceof DataError ? err.message : "No se pudo crear el bloqueo";
-    }
-  }
-
-  async function deleteManagedBlock() {
-    if (!managing) return;
-    actionError = "";
-    try {
-      await dataStore.deleteBlock(managing.id);
-      managing = null;
-      await reload();
-    } catch (err) {
-      actionError = err instanceof DataError ? err.message : "No se pudo eliminar el bloqueo";
     }
   }
 
@@ -358,9 +317,7 @@
     <section class="day-detail" aria-labelledby="day-detail-title">
       <div class="detail-head">
         <h2 id="day-detail-title">{dayLabel(selectedDate)}</h2>
-        <button type="button" class="ghost small" onclick={openCreateBlock}>
-          <Plus size={16} aria-hidden="true" /> Nuevo bloqueo
-        </button>
+        <span class="ghost small hint-static">Bloqueos: pestaña Horarios</span>
       </div>
 
       {#if selectedBookings.length === 0 && selectedBlocks.length === 0}
@@ -396,22 +353,14 @@
 
           {#each selectedBlocks as block (block.id)}
             <li>
-              <button
-                type="button"
-                class="appt block-row"
-                onclick={() => {
-                  actionError = "";
-                  managing = block;
-                }}
-                aria-label={`Bloqueo ${block.label} ${block.timeSlot}`}
-              >
-                <span class="appt-time">{block.timeSlot}</span>
+              <div class="appt block-row read-only" aria-label={blockLabel(block)}>
+                <span class="appt-time">{blockTimeLabel(block)}</span>
                 <span class="appt-main">
-                  <span class="appt-title">{block.label}</span>
-                  <span class="appt-service">Bloqueo · {block.durationMinutes} min</span>
+                  <span class="appt-title">{block.reason || "Bloqueo"}</span>
+                  <span class="appt-service">{block.isFullDay ? "Día completo" : "Bloqueo"}</span>
                 </span>
-                <span class="badge badge-block">Bloqueo</span>
-              </button>
+                <span class="badge badge-block">{block.isFullDay ? "Día completo" : "Rango"}</span>
+              </div>
             </li>
           {/each}
         </ul>
@@ -490,82 +439,6 @@
     {#if actionError}
       <p class="error" role="alert">{actionError}</p>
     {/if}
-  </section>
-{/if}
-
-{#if creating}
-  <div class="backdrop" onclick={() => (creating = false)} role="presentation"></div>
-  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="block-modal-title">
-    <header class="modal-head">
-      <h2 id="block-modal-title">Crear Bloqueo</h2>
-      <button type="button" class="icon-btn" onclick={() => (creating = false)} aria-label="Cerrar">
-        <X size={20} />
-      </button>
-    </header>
-
-    <form onsubmit={(e) => { e.preventDefault(); submitBlock(); }}>
-      <p class="hint-block">{selectedDate}</p>
-
-      <label class="field" for="nb-time">Hora de inicio</label>
-      <select class="input" id="nb-time" bind:value={nbTime}>
-        {#each slots as slot (slot)}
-          <option value={slot}>{slot}</option>
-        {/each}
-      </select>
-
-      <label class="field" for="nb-label">Etiqueta</label>
-      <input class="input" id="nb-label" type="text" list="block-labels" bind:value={nbLabel} />
-      <datalist id="block-labels">
-        <option value="Almuerzo" />
-        <option value="Personal" />
-        <option value="Mantenimiento" />
-      </datalist>
-
-      <label class="field" for="nb-duration">Duración (min)</label>
-      <select class="input" id="nb-duration" bind:value={nbDuration}>
-        <option value={15}>15</option>
-        <option value={30}>30</option>
-        <option value={60}>60</option>
-        <option value={90}>90</option>
-        <option value={120}>120</option>
-      </select>
-
-      {#if creatingError}
-        <p class="error" role="alert">{creatingError}</p>
-      {/if}
-
-      <div class="modal-actions">
-        <button type="button" class="ghost" onclick={() => (creating = false)}>Cancelar</button>
-        <button type="submit" class="primary">Crear Bloqueo</button>
-      </div>
-    </form>
-  </section>
-{/if}
-
-{#if managing}
-  <div class="backdrop" onclick={() => (managing = null)} role="presentation"></div>
-  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="manage-modal-title">
-    <header class="modal-head">
-      <h2 id="manage-modal-title">Bloqueo</h2>
-      <button type="button" class="icon-btn" onclick={() => (managing = null)} aria-label="Cerrar">
-        <X size={20} />
-      </button>
-    </header>
-    <dl class="detail">
-      <dt>Etiqueta</dt>
-      <dd>{managing.label}</dd>
-      <dt>Fecha / Hora</dt>
-      <dd>{managing.date} · {managing.timeSlot}</dd>
-      <dt>Duración</dt>
-      <dd>{managing.durationMinutes} min</dd>
-    </dl>
-    {#if actionError}
-      <p class="error" role="alert">{actionError}</p>
-    {/if}
-    <div class="actions">
-      <button type="button" class="danger" onclick={deleteManagedBlock}>Eliminar Bloqueo</button>
-      <button type="button" class="ghost" onclick={() => (managing = null)}>Cerrar</button>
-    </div>
   </section>
 {/if}
 
@@ -910,6 +783,16 @@
     border-color: var(--accent-wood);
   }
 
+  .appt.read-only {
+    cursor: default;
+  }
+
+  .appt.read-only:hover,
+  .appt.read-only:focus-visible {
+    border-color: var(--accent-wood);
+    outline: none;
+  }
+
   .empty {
     margin: 0;
     color: var(--text-muted);
@@ -1147,6 +1030,12 @@
     margin: 0;
     color: var(--text-gold);
     font-weight: 700;
+  }
+
+  .hint-static {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 0.4rem 0.9rem;
   }
 
   .modal form {

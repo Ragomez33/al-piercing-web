@@ -6,10 +6,6 @@
  */
 import { localISODate } from "./dates";
 
-export const CALENDAR_START_MIN = 9 * 60; // 09:00
-export const CALENDAR_END_MIN = 19 * 60 + 30; // 19:30 (last bookable slot)
-export const ROW_MINUTES = 30;
-
 /** A single cell of the monthly 6×7 grid (feature 012, MON-01). */
 export interface MonthDayCell {
   date: string; // local ISO yyyy-mm-dd
@@ -24,16 +20,6 @@ export interface DaySummary {
   pending: number;
   confirmed: number;
   cancelled: number;
-}
-
-export interface Occupancy {
-  time: string; // HH:mm
-  durationMinutes: number;
-}
-
-function minutesOf(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
 }
 
 /** Monday-start week containing the given date. */
@@ -112,41 +98,4 @@ export function dayStatusSummary(
     if (booking.status !== "CANCELLED") summary.total += 1;
   }
   return summary;
-}
-
-/** All start times in the calendar window, one per row. */
-export function calendarRows(): string[] {
-  const rows: string[] = [];
-  for (let m = CALENDAR_START_MIN; m <= CALENDAR_END_MIN; m += ROW_MINUTES) {
-    rows.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
-  }
-  return rows;
-}
-
-/** True when [start, start+duration) overlaps any occupancy interval. */
-export function isBusy(occupancies: Occupancy[], start: string, durationMinutes: number): boolean {
-  const startMin = minutesOf(start);
-  const endMin = startMin + durationMinutes;
-  return occupancies.some((o) => {
-    const os = minutesOf(o.time);
-    const oe = os + o.durationMinutes;
-    return startMin < oe && os < endMin;
-  });
-}
-
-/** Occupancies for a single date from bookings + blocks (excludes an optional booking id). */
-export function buildOccupancies(
-  bookings: { date: string; timeSlot: string; status: string; id: string; durationMinutes: number }[],
-  blocks: { date: string; timeSlot: string; durationMinutes: number }[],
-  date: string,
-  excludeBookingId?: string,
-): Occupancy[] {
-  const active = bookings.filter(
-    (b) => b.date === date && (b.status === "PENDING" || b.status === "CONFIRMED") && b.id !== excludeBookingId,
-  );
-  const dayBlocks = blocks.filter((b) => b.date === date);
-  return [
-    ...active.map((b) => ({ time: b.timeSlot, durationMinutes: b.durationMinutes })),
-    ...dayBlocks.map((b) => ({ time: b.timeSlot, durationMinutes: b.durationMinutes })),
-  ];
 }

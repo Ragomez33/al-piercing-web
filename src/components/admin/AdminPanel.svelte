@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { CalendarDays, Image, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
+  import { CalendarDays, Clock, Image, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -21,8 +21,9 @@
   import { formatCents } from "../../lib/utils/money";
   import { uploadImage, uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
+  import AdminSchedule from "./AdminSchedule.svelte";
 
-  type AdminTab = "calendar" | "catalog" | "services" | "gallery" | "team";
+  type AdminTab = "calendar" | "schedule" | "catalog" | "services" | "gallery" | "team";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -613,7 +614,8 @@
       status = "login";
     }
     const params = new URLSearchParams(window.location.search);
-    if (params.get("tab") === "catalog") tab = "catalog";
+    if (params.get("tab") === "schedule") tab = "schedule";
+    else if (params.get("tab") === "catalog") tab = "catalog";
     else if (params.get("tab") === "services") tab = "services";
     else if (params.get("tab") === "gallery") tab = "gallery";
     else if (params.get("tab") === "team") tab = "team";
@@ -832,6 +834,15 @@
           <button
             type="button"
             class="side-link"
+            class:active={tab === "schedule"}
+            aria-current={tab === "schedule" ? "page" : undefined}
+            onclick={() => switchTab("schedule")}
+          >
+            <Clock size={18} aria-hidden="true" /> Horarios
+          </button>
+          <button
+            type="button"
+            class="side-link"
             class:active={tab === "catalog"}
             aria-current={tab === "catalog" ? "page" : undefined}
             onclick={() => switchTab("catalog")}
@@ -880,6 +891,8 @@
     <section class="content" aria-label="Contenido del panel">
     {#if tab === "calendar"}
       <AdminCalendar />
+    {:else if tab === "schedule"}
+      <AdminSchedule />
     {:else if tab === "catalog"}
       <div class="toolbar">
         <button type="button" class="primary" onclick={() => { createError = ""; showCreate = true; }}>

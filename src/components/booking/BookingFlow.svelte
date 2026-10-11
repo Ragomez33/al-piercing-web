@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { Clock } from "lucide-svelte";
   import { type PiercingService } from "../../lib/data/services";
   import { submitBookingRequest } from "../../lib/services/booking";
+  import { getDayAvailability } from "../../lib/services/availability";
   import { calcDepositCents, formatCents } from "../../lib/utils/money";
   import { PAYMENT_BINANCE_PAY, PAYMENT_PAGO_MOVIL, WHATSAPP_PHONE } from "../../lib/config";
   import { DataError, dataStore, listFallbackServices } from "../../lib/data/store";
-  import { agendaTimes, localISODate } from "../../lib/utils/dates";
+  import { subscribeToDataChanges } from "../../lib/data/realtime";
+  import { localISODate } from "../../lib/utils/dates";
 
   let selected = $state<PiercingService | null>(null);
   let date = $state("");
@@ -15,11 +17,18 @@
   let clientWhatsapp = $state("");
   let notes = $state("");
 
-  // Real availability via the data layer (FR-004) — no deterministic fake agenda.
-  let bookedSlots = $state<string[]>([]);
+  // Real availability via the availability service (feature 017): only genuinely
+  // free slots are rendered — in working hours, not booked, not covered by blocks.
+  let freeSlots = $state<string[]>([]);
   let slotsLoading = $state(false);
+  let availabilityNotice = $state("");
   let submitError = $state("");
   let submitting = $state(false);
+
+  // Live refresh (feature 017 FR-019): blocks/bookings/schedule changes land here
+  // without a reload; failures keep the last known availability.
+  let liveTimer: ReturnType<typeof setTimeout> | null = null;
+  let unsubscribeLive: (() => void) | null = null;
 
   // Service menu loaded from the managed data source (feature 011, FR-002).
   let services = $state<PiercingService[]>([]);
@@ -33,7 +42,6 @@
   let lastFocused: HTMLElement | null = null;
 
   const today = localISODate();
-  const slots = agendaTimes();
 
   function closeSuccess() {
     successOpen = false;
@@ -51,43 +59,43 @@
     if (successOpen && successModal) successModal.focus();
   });
 
-  async function refreshAvailability() {
-    if (!date) return;
-    try {
-      const [booked, blocked] = await Promise.all([
-        dataStore.getBookedSlots(date),
-        dataStore.getBlockedSlots(date),
-      ]);
-      bookedSlots = [...new Set([...booked, ...blocked])];
-    } catch {
-      // Keep the last known availability on transient read failures.
-    }
-  }
-
-  async function onDateChange() {
-    time = "";
-    submitError = "";
-    if (!date) {
-      bookedSlots = [];
+  async function loadAvailability(showLoading: boolean) {
+    if (!date || !selected) {
+      freeSlots = [];
       return;
     }
-    slotsLoading = true;
+    if (showLoading) slotsLoading = true;
     try {
-      const [booked, blocked] = await Promise.all([
-        dataStore.getBookedSlots(date),
-        dataStore.getBlockedSlots(date),
-      ]);
-      bookedSlots = [...new Set([...booked, ...blocked])];
+      const availability = await getDayAvailability(date, selected.durationMinutes);
+      freeSlots = availability.slots;
+      availabilityNotice = "";
     } catch (err) {
-      bookedSlots = [];
-      submitError = err instanceof DataError ? err.message : "No se pudo consultar la agenda";
+      // Non-blocking: keep the last known slots; only surface a notice when the
+      // day is effectively empty (no previous data for this date).
+      availabilityNotice = err instanceof DataError ? err.message : "No se pudo consultar la agenda";
     } finally {
-      slotsLoading = false;
+      if (showLoading) slotsLoading = false;
     }
   }
 
-  function isUnavailable(slot: string): boolean {
-    return bookedSlots.includes(slot);
+  function onDateChange() {
+    time = "";
+    submitError = "";
+    availabilityNotice = "";
+    if (!date) {
+      freeSlots = [];
+      return;
+    }
+    // Fresh date: clear the previous day's slots before loading.
+    freeSlots = [];
+    void loadAvailability(true);
+  }
+
+  function scheduleLiveRefresh() {
+    if (liveTimer) clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => {
+      if (date && selected) void loadAvailability(false);
+    }, 250);
   }
 
   let depositCents = $derived(selected ? calcDepositCents(selected.priceCents) : 0);
@@ -139,9 +147,7 @@
 
       // Immediately hold the slot in the public view (no refetch) and clear the
       // client form so the same data cannot be resubmitted (FR-005/FR-006).
-      bookedSlots = bookedSlots.includes(submittedTime)
-        ? bookedSlots
-        : [...bookedSlots, submittedTime];
+      freeSlots = freeSlots.filter((slot) => slot !== submittedTime);
       clientName = "";
       clientWhatsapp = "";
       notes = "";
@@ -154,7 +160,7 @@
       // Persistence failed: no WhatsApp, visible error, retryable (FR-007).
       submitError =
         err instanceof DataError ? err.message : "No se pudo registrar la cita. Intentalo de nuevo.";
-      await refreshAvailability();
+      void loadAvailability(false);
     } finally {
       submitting = false;
     }
@@ -180,6 +186,9 @@
 
   onMount(async () => {
     await loadServices();
+    unsubscribeLive = subscribeToDataChanges(["blocks", "bookings", "schedule"], () => {
+      scheduleLiveRefresh();
+    });
     const id = new URLSearchParams(window.location.search).get("service");
     if (!id) return;
     const match = services.find((service) => service.id === id);
@@ -187,6 +196,11 @@
       selected = match;
       revealForm();
     }
+  });
+
+  onDestroy(() => {
+    unsubscribeLive?.();
+    if (liveTimer) clearTimeout(liveTimer);
   });
 </script>
 
@@ -258,20 +272,26 @@
         {#if slotsLoading}
           <p class="hint" aria-live="polite">Consultando disponibilidad…</p>
         {:else}
-          <div class="slot-grid">
-            {#each slots as slot (slot)}
-              <button
-                type="button"
-                class="slot"
-                class:active={time === slot}
-                disabled={isUnavailable(slot)}
-                aria-pressed={time === slot}
-                onclick={() => { time = slot; }}
-              >
-                {slot}
-              </button>
-            {/each}
-          </div>
+          {#if availabilityNotice}
+            <p class="hint" role="status">{availabilityNotice}</p>
+          {/if}
+          {#if freeSlots.length === 0}
+            <p class="hint">No hay horarios disponibles para esta fecha.</p>
+          {:else}
+            <div class="slot-grid">
+              {#each freeSlots as slot (slot)}
+                <button
+                  type="button"
+                  class="slot"
+                  class:active={time === slot}
+                  aria-pressed={time === slot}
+                  onclick={() => { time = slot; }}
+                >
+                  {slot}
+                </button>
+              {/each}
+            </div>
+          {/if}
         {/if}
       {:else}
         <p class="hint">Elegí una fecha para ver los horarios disponibles.</p>

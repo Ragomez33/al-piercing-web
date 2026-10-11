@@ -9,35 +9,42 @@ Mono-tienda para un estudio de perforaciones y joyería corporal. Construida con
 | `/` | Landing | Hero, lista de servicios estilo Setmore (por categoría), **galería gestionada "Nuestro trabajo"** (mosaico + lightbox, live-sync), bloque de proceso y sección **Nuestro Equipo / Artistas** (datos gestionados) |
 | `/landing-v2` | Landing alternativa | Variante Setmore de **scroll continuo**: barra de anclas + grid de 2 columnas con **tarjeta lateral sticky** (horario en vivo, "Reservar mi cita") y **sección de reseñas** completa en el flujo principal (valoración, distribución y testimonios). Reutiliza la misma capa de datos y sincroniza servicios/equipo/galería en vivo; `/` queda intacta para comparar |
 | `/catalog` | Catálogo | Argollas/labrets, zirconia & navel y aftercare con carrito flotante y checkout por WhatsApp |
-| `/booking` | Reservar | Flujo servicio → fecha/hora (bloquea slots ocupados) → datos → adelanto 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp (ya no abre WhatsApp automáticamente) |
-| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD del menú), **Galería** (subir/activar/desactivar/eliminar fotos) y **Equipo** (CRUD del staff) |
+| `/booking` | Reservar | Flujo servicio → fecha/hora (ofrece solo horarios **libres**: dentro del horario semanal, sin citas y sin bloqueos de rango/día completo; si un horario ya no está disponible al confirmar, la acción se bloquea con "Este horario ya no se encuentra disponible") → datos → adelanto 50%. Al enviar **persiste la solicitud como `PENDING`** (bloquea el horario al instante) y muestra un panel de éxito con un aviso opcional por WhatsApp. Se sincroniza en vivo con cambios de bloqueos/citas/horario |
+| `/admin` | Panel | Protegido por login (Supabase Auth): layout **dashboard** con sidebar lateral (o drawer en móvil) y navegación vertical. **Calendario** mensual (grilla con badges/dots por día, detalle del día, aprobar/cancelar/reagendar, bloqueos en modo lectura), **Horarios** (configuración semanal + bloqueos avanzados por rango de horas o días completos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD del menú), **Galería** (subir/activar/desactivar/eliminar fotos) y **Equipo** (CRUD del staff) |
 
 ## Datos (capa híbrida)
 
 Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
-  `localStorage` (`alpi:bookings:v1` / `alpi:timeblocks:v1` / `alpi:products:v1` / `alpi:services:v1` /
-  `alpi:team:v1` / `alpi:gallery:v1`) sembrado con el contenido estático.
+  `localStorage` (`alpi:bookings:v1` / `alpi:availabilityblocks:v1` / `alpi:studioschedule:v1` /
+  `alpi:products:v1` / `alpi:services:v1` / `alpi:team:v1` / `alpi:gallery:v1`) sembrado con el contenido
+  estático (el horario por defecto es Lun–Sáb 11:00–20:00, Dom cerrado).
 - **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
   `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios +
-  `0006_team_members.sql` del equipo + `0007_gallery.sql` de la galería).
+  `0006_team_members.sql` del equipo + `0007_gallery.sql` de la galería + `0008_availability_blocks.sql`
+  de bloqueos por rango y horario semanal).
 - Los servicios, el equipo y la galería son datos gestionados: el frontend (`BookingFlow`, landings,
   `AdminCalendar`, `TeamSection`, `LandingGallery`) los lee con `dataStore.listServices()` /
   `dataStore.listTeamMembers()` / `dataStore.listGalleryItems()` (nunca importa listas hardcodeadas);
   si la consulta falla, cae al seed demo servido por la capa de datos.
+- La disponibilidad pública (feature 017) se calcula con `src/lib/utils/availability.ts` (motor puro)
+  detrás del servicio de dominio `src/lib/services/availability.ts` (`getDayAvailability`), que cruza el
+  horario semanal (`studio_schedule`), las citas activas y los bloqueos por rango (`availability_blocks`).
 - Las transiciones de estado de las reservas pasan por el servicio de dominio
   `src/lib/services/booking.ts` (`submitBookingRequest` / `approveBooking` / `cancelBooking`); los
-  componentes no llaman a Supabase directamente.
+  componentes no llaman a Supabase directamente. `submitBookingRequest` re-valida la disponibilidad antes
+  de persistir y rechaza con "Este horario ya no se encuentra disponible".
 
 ## Estructura
 
 ```text
 src/
 ├── components/
-│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + inventario + servicios + galería + equipo)
-│   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil)
-│   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + adelanto
+│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + horarios + inventario + servicios + galería + equipo)
+│   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil, bloqueos en modo lectura)
+│   ├── admin/AdminSchedule.svelte    # Horarios semanales + bloqueos avanzados (rango de horas / días completos)
+│   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + adelanto (slots = motor de disponibilidad + live sync)
 │   ├── canvas/InkBackgroundCanvas.svelte
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
 │   ├── catalog/ProductCard.svelte
@@ -55,12 +62,13 @@ src/
 │   ├── data/store.ts                 # Capa híbrida unificada (modo demo/producción)
 │   ├── data/realtime.ts              # Pub/sub de cambios (BroadcastChannel / Supabase Realtime)
 │   ├── data/gallery.ts               # Seed GALLERY_SEED de la galería (demo)
+│   ├── data/schedule.ts              # Seed DEFAULT_SCHEDULE_SEED del horario semanal (demo)
 │   ├── data/adapters/{local,supabase}.ts
 │   ├── data/services.ts              # PiercingService/NewServiceInput + seed PIERCING_SERVICES (UUIDs)
 │   ├── data/team.ts                  # Seed TEAM_MEMBERS del equipo (UUIDs)
-│   ├── services/{booking,storage}.ts # Dominio (reservas) + subida de imágenes (producto/avatar)
-│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/GalleryItemRecord/DataStore
-│   └── utils/{money,booking,dates,calendar,hours}.ts
+│   ├── services/{booking,availability,storage}.ts # Dominio (reservas + disponibilidad) + subida de imágenes
+│   ├── types/{content,domain}.ts     # Contenido + Booking/ProductRecord/TeamMember/GalleryItemRecord/AvailabilityBlock/StudioSchedule/DataStore
+│   └── utils/{money,booking,dates,calendar,hours,availability}.ts
 ├── pages/{index,landing-v2,catalog,booking,admin}.astro
 ├── pages/robots.txt.ts               # robots.txt generado (Sitemap absoluto desde SITE)
 ├── stores/cart.ts
@@ -142,7 +150,9 @@ autodetectan Astro).
 3. Para **Modo Producción** con Supabase:
    - Crear el proyecto en Supabase.
    - Aplicar las migraciones (`npx supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
-     `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado y `0006_team_members.sql`
-     agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada).
+     `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado, `0006_team_members.sql`
+     agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada) y
+     `0008_availability_blocks.sql` agrega `public.availability_blocks` + `public.studio_schedule`
+     (RLS: lectura pública de disponibilidad, escritura de administradores).
    - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
 4. Build: `npm run build` (directorio de publicación: `dist`).
