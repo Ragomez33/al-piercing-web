@@ -188,13 +188,15 @@
 
 <section class="calendar" aria-label="Calendario mensual">
   <header class="cal-head">
-    <button type="button" class="nav" onclick={() => goMonth(-1)} aria-label="Mes anterior">
-      <ChevronLeft size={20} />
-    </button>
-    <span class="cal-title">{monthTitle}</span>
-    <button type="button" class="nav" onclick={() => goMonth(1)} aria-label="Mes siguiente">
-      <ChevronRight size={20} />
-    </button>
+    <div class="cal-nav">
+      <button type="button" class="nav" onclick={() => goMonth(-1)} aria-label="Mes anterior">
+        <ChevronLeft size={20} />
+      </button>
+      <span class="cal-title">{monthTitle}</span>
+      <button type="button" class="nav" onclick={() => goMonth(1)} aria-label="Mes siguiente">
+        <ChevronRight size={20} />
+      </button>
+    </div>
     <button type="button" class="today-btn" onclick={goToday}>Hoy</button>
   </header>
 
@@ -377,16 +379,31 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  /* Month control unit: [ < ]  [ Month ]  [ > ] */
+  .cal-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .cal-title {
     flex: 1;
+    min-width: 0;
     color: var(--text-primary);
     font-weight: 700;
     font-size: 1.15rem;
     font-variant-numeric: tabular-nums;
     text-align: center;
     text-transform: capitalize;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .nav {
@@ -875,6 +892,12 @@
 
   /* Breakpoint switch: grid on desktop, day strip on mobile. */
   @media (max-width: 767px) {
+    /* Clear the fixed ☰ drawer toggle (top-left) so the previous-month arrow
+       never sits under it — even while the calendar scrolls beneath the toggle. */
+    .cal-head {
+      padding-left: 2.75rem;
+    }
+
     .grid-wrap {
       display: none;
     }
