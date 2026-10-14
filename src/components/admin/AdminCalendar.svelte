@@ -892,10 +892,19 @@
 
   /* Breakpoint switch: grid on desktop, day strip on mobile. */
   @media (max-width: 767px) {
-    /* Clear the fixed ☰ drawer toggle (top-left) so the previous-month arrow
-       never sits under it — even while the calendar scrolls beneath the toggle. */
+    /* Stack the header into its own lines. The fixed ☰ drawer toggle lives in the
+       app shell (NOT in this header) and floats over the reserved left gutter, so
+       it never enters the flex flow nor covers the arrows. */
     .cal-head {
-      padding-left: 2.75rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.5rem;
+      padding-left: 3rem;
+    }
+
+    .cal-nav,
+    .today-btn {
+      width: 100%;
     }
 
     .grid-wrap {
