@@ -1622,13 +1622,15 @@
     padding: 2.5rem 3rem;
   }
 
-  /* Drawer toggle: hidden until the sidebar becomes off-canvas. */
+  /* Drawer toggle: hidden until the sidebar becomes off-canvas. It floats at the
+     top-left of the shell (fixed, out of the content flow) above the panel
+     content; modals (z 40/41+) render later in the DOM so they still cover it. */
   .drawer-toggle {
     display: none;
     position: fixed;
     top: 0.75rem;
     left: 0.75rem;
-    z-index: var(--z-overlay);
+    z-index: var(--z-modal);
     width: 44px;
     height: 44px;
     align-items: center;
@@ -1720,6 +1722,8 @@
     }
 
     .content {
+      /* Top band (72px) clears the fixed ☰ toggle (top 12px + 44px = 56px) so the
+         calendar month nav never starts underneath the hamburger. */
       padding: 4.5rem 1.25rem 2rem;
     }
   }

@@ -892,14 +892,14 @@
 
   /* Breakpoint switch: grid on desktop, day strip on mobile. */
   @media (max-width: 767px) {
-    /* Stack the header into its own lines. The fixed ☰ drawer toggle lives in the
-       app shell (NOT in this header) and floats over the reserved left gutter, so
-       it never enters the flex flow nor covers the arrows. */
+    /* The month header spans the FULL content width — identical base alignment to
+       the day strip/grid below. The fixed ☰ drawer toggle lives in the app shell
+       and floats over the top padding band (see AdminPanel), so it never forces
+       an indent or distorts the header geometry. */
     .cal-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 0.5rem;
-      padding-left: 3rem;
     }
 
     .cal-nav,
