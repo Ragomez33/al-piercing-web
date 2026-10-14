@@ -337,40 +337,44 @@
           {@const day = draftFor(weekday)}
           {#if day}
             <li class="sched-row" class:closed={!day.isOpen}>
-              <span class="sched-name">{WEEKDAY_LABELS[weekday]}</span>
-              <button
-                type="button"
-                class="toggle"
-                class:on={day.isOpen}
-                role="switch"
-                aria-checked={day.isOpen}
-                aria-label={`Abrir o cerrar ${WEEKDAY_LABELS[weekday]}`}
-                disabled={savingSchedule}
-                onclick={() => toggleDay(day)}
-              >
-                <span class="knob" aria-hidden="true"></span>
-              </button>
-              <label class="sr-label" for={`open-${weekday}`}>Apertura {WEEKDAY_LABELS[weekday]}</label>
-              <input
-                class="input time"
-                id={`open-${weekday}`}
-                type="time"
-                value={day.openTime ?? ""}
-                disabled={!day.isOpen || savingSchedule}
-                oninput={(e) => setDraftWeekday(weekday, { openTime: e.currentTarget.value })}
-                aria-label={`Apertura ${WEEKDAY_LABELS[weekday]}`}
-              />
-              <span class="sched-sep" aria-hidden="true">a</span>
-              <label class="sr-label" for={`close-${weekday}`}>Cierre {WEEKDAY_LABELS[weekday]}</label>
-              <input
-                class="input time"
-                id={`close-${weekday}`}
-                type="time"
-                value={day.closeTime ?? ""}
-                disabled={!day.isOpen || savingSchedule}
-                oninput={(e) => setDraftWeekday(weekday, { closeTime: e.currentTarget.value })}
-                aria-label={`Cierre ${WEEKDAY_LABELS[weekday]}`}
-              />
+              <div class="sched-head">
+                <span class="sched-name">{WEEKDAY_LABELS[weekday]}</span>
+                <button
+                  type="button"
+                  class="toggle"
+                  class:on={day.isOpen}
+                  role="switch"
+                  aria-checked={day.isOpen}
+                  aria-label={`Abrir o cerrar ${WEEKDAY_LABELS[weekday]}`}
+                  disabled={savingSchedule}
+                  onclick={() => toggleDay(day)}
+                >
+                  <span class="knob" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="sched-times">
+                <label class="sr-label" for={`open-${weekday}`}>Apertura {WEEKDAY_LABELS[weekday]}</label>
+                <input
+                  class="input time"
+                  id={`open-${weekday}`}
+                  type="time"
+                  value={day.openTime ?? ""}
+                  disabled={!day.isOpen || savingSchedule}
+                  oninput={(e) => setDraftWeekday(weekday, { openTime: e.currentTarget.value })}
+                  aria-label={`Apertura ${WEEKDAY_LABELS[weekday]}`}
+                />
+                <span class="sched-sep" aria-hidden="true">a</span>
+                <label class="sr-label" for={`close-${weekday}`}>Cierre {WEEKDAY_LABELS[weekday]}</label>
+                <input
+                  class="input time"
+                  id={`close-${weekday}`}
+                  type="time"
+                  value={day.closeTime ?? ""}
+                  disabled={!day.isOpen || savingSchedule}
+                  oninput={(e) => setDraftWeekday(weekday, { closeTime: e.currentTarget.value })}
+                  aria-label={`Cierre ${WEEKDAY_LABELS[weekday]}`}
+                />
+              </div>
             </li>
           {/if}
         {/each}
@@ -560,11 +564,16 @@
     padding: 1rem 1.15rem;
   }
 
+  /* Mobile-first: each weekday row is two lines —
+     [day name + toggle] / [open "a" close]. Desktop (≥768px) restores one line. */
   .sched-row {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 0.8rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.7rem 0.8rem;
     background: var(--bg-surface-elevated);
     border: var(--border-card);
     border-radius: var(--radius-card);
@@ -579,16 +588,66 @@
     opacity: 0.65;
   }
 
+  /* Top line: day name (left, never wraps) + toggle (right). */
+  .sched-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
   .sched-name {
-    flex: 1 1 auto;
     min-width: 0;
     color: var(--text-primary);
     font-weight: 700;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Bottom line: full-width open/close pair. */
+  .sched-times {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
   }
 
   .time {
-    width: 110px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Desktop: original clean single row (name … toggle | open a close). */
+  @media (min-width: 768px) {
+    .sched-row {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .sched-head {
+      flex: 1 1 auto;
+    }
+
+    .sched-name {
+      flex: 1 1 auto;
+    }
+
+    .sched-times {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: auto;
+    }
+
+    .time {
+      width: 110px;
+    }
   }
 
   .input:disabled {
@@ -693,6 +752,8 @@
 
   .input {
     min-height: 44px;
+    max-width: 100%;
+    min-width: 0;
     border-radius: var(--radius-btn);
     border: var(--border-card);
     background: var(--bg-surface-elevated);
