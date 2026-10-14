@@ -6,14 +6,53 @@
 import type { NewServiceInput, PiercingService } from "../data/services";
 import type { ProductCategory } from "./content";
 
-export type BookingStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
+export type BookingStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "COMPLETED" | "CANCELLED";
 export type DataMode = "demo" | "production";
+
+/** Managed deposit payment method (feature 018). */
+export type PaymentMethodType = "pago_movil" | "binance" | "zelle" | "transfer" | "cash";
+
+/**
+ * Type-specific banking fields (feature 018). A flat string map whose keys are
+ * whitelisted per type by `src/lib/utils/payments.ts`; no `any`.
+ */
+export type PaymentMethodDetails = Record<string, string>;
+
+export interface PaymentMethod {
+  id: string; // uuid
+  type: PaymentMethodType;
+  title: string;
+  details: PaymentMethodDetails;
+  instructions: string;
+  isActive: boolean;
+  createdAt: string; // ISO
+}
+
+/** Creation input — `id`/`createdAt` generated, `isActive` forced true by the data source. */
+export interface NewPaymentMethodInput {
+  type: PaymentMethodType;
+  title: string;
+  details: PaymentMethodDetails;
+  instructions?: string;
+}
+
+/** Append-only appointment status transition record (feature 018). */
+export interface BookingEvent {
+  id: string;
+  bookingId: string;
+  /** `null` for the creation event (no previous status). */
+  fromStatus: BookingStatus | null;
+  toStatus: BookingStatus;
+  createdAt: string; // ISO
+}
 
 export interface Booking {
   id: string;
   createdAt: string; // ISO
   clientName: string;
   clientWhatsapp: string;
+  /** Optional client email shown in the admin detail when present. */
+  clientEmail?: string;
   /**
    * UUID of the referenced service, or `null` once that service was deleted
    * (FK `ON DELETE SET NULL`). `serviceName`/`priceCents` keep the snapshot.
@@ -26,6 +65,14 @@ export interface Booking {
   timeSlot: string; // HH:mm
   status: BookingStatus;
   notes?: string;
+  /** Selected payment method uuid, or `null` when no deposit step ran (feature 018). */
+  paymentMethodId: string | null;
+  /** Captured method title snapshot (survives method edit/delete). */
+  paymentMethodName: string;
+  /** Client-entered payment reference. */
+  paymentReference: string;
+  /** Public URL / data URL of the uploaded receipt. */
+  paymentProofUrl: string;
 }
 
 export interface ProductRecord {
@@ -41,12 +88,18 @@ export interface ProductRecord {
 export interface NewBookingInput {
   clientName: string;
   clientWhatsapp: string;
+  clientEmail?: string;
   serviceId: string;
   serviceName: string;
   priceCents: number;
   date: string;
   timeSlot: string;
   notes?: string;
+  /** Optional deposit-payment fields (feature 018); absent for non-deposit services. */
+  paymentMethodId?: string | null;
+  paymentMethodName?: string;
+  paymentReference?: string;
+  paymentProofUrl?: string;
 }
 
 export interface NewProductInput {
@@ -209,6 +262,14 @@ export interface DataStore {
   listBookings(input?: { date?: string }): Promise<Booking[]>;
   createBooking(input: NewBookingInput): Promise<Booking>;
   updateBookingStatus(id: string, status: BookingStatus): Promise<Booking>;
+  /** Append-only status-transition log for one appointment (feature 018). */
+  listBookingEvents(bookingId: string): Promise<BookingEvent[]>;
+  /** Managed deposit payment methods (feature 018). Public list returns only active. */
+  listPaymentMethods(input?: { includeInactive?: boolean }): Promise<PaymentMethod[]>;
+  createPaymentMethod(input: NewPaymentMethodInput): Promise<PaymentMethod>;
+  updatePaymentMethod(id: string, patch: Partial<NewPaymentMethodInput>): Promise<PaymentMethod>;
+  togglePaymentMethodActive(id: string): Promise<PaymentMethod>;
+  deletePaymentMethod(id: string): Promise<void>;
   /** Manual unavailability blocks (feature 017). Range-based `[start, end)`. */
   listBlocks(input?: { date?: string }): Promise<AvailabilityBlock[]>;
   createBlock(input: NewAvailabilityBlockInput): Promise<AvailabilityBlock>;

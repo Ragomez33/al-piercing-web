@@ -6,14 +6,17 @@ import {
   DataError,
   type AvailabilityBlock,
   type Booking,
+  type BookingEvent,
   type BookingStatus,
   type DataStore,
   type GalleryItemRecord,
   type NewAvailabilityBlockInput,
   type NewBookingInput,
   type NewGalleryItemInput,
+  type NewPaymentMethodInput,
   type NewProductInput,
   type NewTeamMemberInput,
+  type PaymentMethod,
   type ProductRecord,
   type SchedulePatch,
   type StudioSchedule,
@@ -28,7 +31,9 @@ import {
   validateBlockInput,
   validateScheduleDayPatch,
 } from "../../utils/availability";
+import { validatePaymentMethodInput } from "../../utils/payments";
 import { GALLERY_SEED } from "../gallery";
+import { PAYMENT_METHOD_SEED } from "../payment-methods";
 import { PIERCING_SERVICES, type NewServiceInput, type PiercingService } from "../services";
 import { DEFAULT_SCHEDULE_SEED } from "../schedule";
 import { TEAM_MEMBERS } from "../team";
@@ -40,6 +45,8 @@ const SCHEDULE_KEY = "alpi:studioschedule:v1";
 const SERVICES_KEY = "alpi:services:v1";
 const TEAM_KEY = "alpi:team:v1";
 const GALLERY_KEY = "alpi:gallery:v1";
+const PAYMENT_METHODS_KEY = "alpi:paymentmethods:v1";
+const BOOKING_EVENTS_KEY = "alpi:bookingevents:v1";
 
 function storage(): Storage {
   try {
@@ -81,7 +88,27 @@ function seedGalleryItems(): GalleryItemRecord[] {
   return GALLERY_SEED.map((item) => ({ ...item }));
 }
 
+function seedPaymentMethods(): PaymentMethod[] {
+  return PAYMENT_METHOD_SEED.map((method) => ({ ...method, details: { ...method.details } }));
+}
+
+function seedBookingEvents(): BookingEvent[] {
+  return [];
+}
+
 const SERVICE_CATEGORIES = ["NOSTRIL", "HELIX", "NAVEL", "TITANIO"] as const;
+
+const BOOKING_STATUSES: readonly BookingStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "REJECTED",
+  "COMPLETED",
+  "CANCELLED",
+];
+
+function isBookingStatus(value: unknown): value is BookingStatus {
+  return typeof value === "string" && (BOOKING_STATUSES as readonly string[]).includes(value);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -89,7 +116,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isBooking(value: unknown): value is Booking {
   if (!isRecord(value)) return false;
-  const status = value.status;
   return (
     typeof value.id === "string" &&
     typeof value.createdAt === "string" &&
@@ -101,7 +127,57 @@ function isBooking(value: unknown): value is Booking {
     typeof value.depositCents === "number" &&
     typeof value.date === "string" &&
     typeof value.timeSlot === "string" &&
-    (status === "PENDING" || status === "CONFIRMED" || status === "CANCELLED")
+    isBookingStatus(value.status) &&
+    // Payment fields are optional for records stored before feature 018; they are
+    // normalized with defaults when read.
+    (value.paymentMethodId === null ||
+      value.paymentMethodId === undefined ||
+      typeof value.paymentMethodId === "string") &&
+    (value.paymentMethodName === undefined || typeof value.paymentMethodName === "string") &&
+    (value.paymentReference === undefined || typeof value.paymentReference === "string") &&
+    (value.paymentProofUrl === undefined || typeof value.paymentProofUrl === "string")
+  );
+}
+
+/** Fills payment defaults so older stored rows satisfy the current `Booking` shape. */
+function withPaymentDefaults(booking: Booking): Booking {
+  return {
+    ...booking,
+    paymentMethodId: booking.paymentMethodId ?? null,
+    paymentMethodName: booking.paymentMethodName ?? "",
+    paymentReference: booking.paymentReference ?? "",
+    paymentProofUrl: booking.paymentProofUrl ?? "",
+  };
+}
+
+function isPaymentMethod(value: unknown): value is PaymentMethod {
+  if (!isRecord(value)) return false;
+  const type = value.type;
+  const typeOk =
+    type === "pago_movil" ||
+    type === "binance" ||
+    type === "zelle" ||
+    type === "transfer" ||
+    type === "cash";
+  return (
+    typeof value.id === "string" &&
+    typeOk &&
+    typeof value.title === "string" &&
+    isRecord(value.details) &&
+    typeof value.instructions === "string" &&
+    typeof value.isActive === "boolean" &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function isBookingEvent(value: unknown): value is BookingEvent {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.bookingId === "string" &&
+    (value.fromStatus === null || isBookingStatus(value.fromStatus)) &&
+    isBookingStatus(value.toStatus) &&
+    typeof value.createdAt === "string"
   );
 }
 
@@ -261,6 +337,23 @@ function newId(): string {
   }
 }
 
+/** Appends a status-transition record (feature 018); append-only, never throws on read. */
+async function appendBookingEvent(
+  bookingId: string,
+  fromStatus: BookingStatus | null,
+  toStatus: BookingStatus,
+): Promise<void> {
+  const events = await readArray(BOOKING_EVENTS_KEY, seedBookingEvents(), isBookingEvent);
+  const event: BookingEvent = {
+    id: newId(),
+    bookingId,
+    fromStatus,
+    toStatus,
+    createdAt: new Date().toISOString(),
+  };
+  await writeArray(BOOKING_EVENTS_KEY, [...events, event]);
+}
+
 export function createLocalAdapter(): DataStore {
   return {
     mode: "demo",
@@ -321,7 +414,9 @@ export function createLocalAdapter(): DataStore {
     },
 
     async listBookings(input): Promise<Booking[]> {
-      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking);
+      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking).then((rows) =>
+        rows.map(withPaymentDefaults),
+      );
       return input?.date ? bookings.filter((booking) => booking.date === input.date) : bookings;
     },
 
@@ -342,6 +437,7 @@ export function createLocalAdapter(): DataStore {
         createdAt: new Date().toISOString(),
         clientName: input.clientName,
         clientWhatsapp: input.clientWhatsapp,
+        clientEmail: input.clientEmail,
         serviceId: input.serviceId,
         serviceName: input.serviceName,
         priceCents: input.priceCents,
@@ -350,20 +446,34 @@ export function createLocalAdapter(): DataStore {
         timeSlot: input.timeSlot,
         status: "PENDING",
         notes: input.notes,
+        paymentMethodId: input.paymentMethodId ?? null,
+        paymentMethodName: input.paymentMethodName ?? "",
+        paymentReference: input.paymentReference ?? "",
+        paymentProofUrl: input.paymentProofUrl ?? "",
       };
       await writeArray(BOOKINGS_KEY, [...bookings, record]);
+      await appendBookingEvent(record.id, null, "PENDING");
       return record;
     },
 
     async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
-      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking);
-      let updated: Booking | undefined;
-      const next = bookings.map((booking) =>
-        booking.id === id ? ((updated = { ...booking, status }), updated) : booking,
+      const bookings = await readArray(BOOKINGS_KEY, seedBookings(), isBooking).then((rows) =>
+        rows.map(withPaymentDefaults),
       );
-      if (!updated) throw new DataError("Reserva no encontrada");
+      const current = bookings.find((booking) => booking.id === id);
+      if (!current) throw new DataError("Reserva no encontrada");
+      const updated: Booking = { ...current, status };
+      const next = bookings.map((booking) => (booking.id === id ? updated : booking));
       await writeArray(BOOKINGS_KEY, next);
+      await appendBookingEvent(id, current.status, status);
       return updated;
+    },
+
+    async listBookingEvents(bookingId: string): Promise<BookingEvent[]> {
+      const events = await readArray(BOOKING_EVENTS_KEY, seedBookingEvents(), isBookingEvent);
+      return events
+        .filter((event) => event.bookingId === bookingId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
 
     async listBlocks(input): Promise<AvailabilityBlock[]> {
@@ -560,6 +670,76 @@ export function createLocalAdapter(): DataStore {
       await writeArray(
         GALLERY_KEY,
         items.filter((item) => item.id !== id),
+      );
+    },
+
+    // --- Payment methods (feature 018) ---
+    async listPaymentMethods(input): Promise<PaymentMethod[]> {
+      const methods = await readArray(PAYMENT_METHODS_KEY, seedPaymentMethods(), isPaymentMethod);
+      return input?.includeInactive ? methods : methods.filter((method) => method.isActive);
+    },
+
+    async createPaymentMethod(input: NewPaymentMethodInput): Promise<PaymentMethod> {
+      validatePaymentMethodInput({
+        type: input.type,
+        title: input.title,
+        details: input.details,
+      });
+      const methods = await readArray(PAYMENT_METHODS_KEY, seedPaymentMethods(), isPaymentMethod);
+      const record: PaymentMethod = {
+        id: newId(),
+        type: input.type,
+        title: input.title.trim(),
+        details: { ...input.details },
+        instructions: input.instructions?.trim() ?? "",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      await writeArray(PAYMENT_METHODS_KEY, [...methods, record]);
+      return record;
+    },
+
+    async updatePaymentMethod(id, patch): Promise<PaymentMethod> {
+      const methods = await readArray(PAYMENT_METHODS_KEY, seedPaymentMethods(), isPaymentMethod);
+      const current = methods.find((method) => method.id === id);
+      if (!current) throw new DataError("Método de pago no encontrado");
+      const merged: PaymentMethod = {
+        ...current,
+        ...patch,
+        title: patch.title !== undefined ? patch.title.trim() : current.title,
+        details: patch.details !== undefined ? { ...patch.details } : current.details,
+        instructions:
+          patch.instructions !== undefined ? patch.instructions.trim() : current.instructions,
+      };
+      validatePaymentMethodInput({
+        type: merged.type,
+        title: merged.title,
+        details: merged.details,
+      });
+      const next = methods.map((method) => (method.id === id ? merged : method));
+      await writeArray(PAYMENT_METHODS_KEY, next);
+      return merged;
+    },
+
+    async togglePaymentMethodActive(id: string): Promise<PaymentMethod> {
+      const methods = await readArray(PAYMENT_METHODS_KEY, seedPaymentMethods(), isPaymentMethod);
+      let updated: PaymentMethod | undefined;
+      const next = methods.map((method) =>
+        method.id === id ? ((updated = { ...method, isActive: !method.isActive }), updated) : method,
+      );
+      if (!updated) throw new DataError("Método de pago no encontrado");
+      await writeArray(PAYMENT_METHODS_KEY, next);
+      return updated;
+    },
+
+    async deletePaymentMethod(id: string): Promise<void> {
+      const methods = await readArray(PAYMENT_METHODS_KEY, seedPaymentMethods(), isPaymentMethod);
+      if (!methods.some((method) => method.id === id)) {
+        throw new DataError("Método de pago no encontrado");
+      }
+      await writeArray(
+        PAYMENT_METHODS_KEY,
+        methods.filter((method) => method.id !== id),
       );
     },
   };

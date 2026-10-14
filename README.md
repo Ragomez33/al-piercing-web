@@ -18,12 +18,14 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 
 - **Modo Demo** (por defecto): si no hay `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`, usa
   `localStorage` (`alpi:bookings:v1` / `alpi:availabilityblocks:v1` / `alpi:studioschedule:v1` /
-  `alpi:products:v1` / `alpi:services:v1` / `alpi:team:v1` / `alpi:gallery:v1`) sembrado con el contenido
+  `alpi:products:v1` / `alpi:services:v1` / `alpi:team:v1` / `alpi:gallery:v1` / `alpi:paymentmethods:v1` /
+  `alpi:bookingevents:v1`) sembrado con el contenido
   estático (el horario por defecto es Lun–Sáb 11:00–20:00, Dom cerrado).
 - **Modo Producción**: si ambos `PUBLIC_*` existen, conmuta automáticamente a Supabase (migraciones en
   `supabase/migrations/`: `0001`–`0004` del esquema base + `0005_services.sql` del menú de servicios +
   `0006_team_members.sql` del equipo + `0007_gallery.sql` de la galería + `0008_availability_blocks.sql`
-  de bloqueos por rango y horario semanal).
+  de bloqueos por rango y horario semanal + `0009_payments_and_booking_proof.sql` de métodos de pago,
+  campos de adelanto/comprobante en citas y bitácora `booking_events`).
 - Los servicios, el equipo y la galería son datos gestionados: el frontend (`BookingFlow`, landings,
   `AdminCalendar`, `TeamSection`, `LandingGallery`) los lee con `dataStore.listServices()` /
   `dataStore.listTeamMembers()` / `dataStore.listGalleryItems()` (nunca importa listas hardcodeadas);
@@ -41,9 +43,11 @@ Todo se lee/escribe mediante `src/lib/data/store.ts`:
 ```text
 src/
 ├── components/
-│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + horarios + inventario + servicios + galería + equipo)
+│   ├── admin/AdminPanel.svelte       # Island del panel (login + calendario + horarios + métodos de pago + inventario + servicios + galería + equipo)
 │   ├── admin/AdminCalendar.svelte    # Calendario mensual (grilla escritorio + franja/lista móvil, bloqueos en modo lectura)
+│   ├── admin/AdminBookingDetail.svelte # Detalle de cita + verificación de pago (comprobante ampliable) + aprobar/rechazar/notificar
 │   ├── admin/AdminSchedule.svelte    # Horarios semanales + bloqueos avanzados (rango de horas / días completos)
+│   ├── admin/AdminPayments.svelte    # CRUD de métodos de pago (campos dinámicos por tipo)
 │   ├── booking/BookingFlow.svelte    # Island del flujo de reserva + adelanto (slots = motor de disponibilidad + live sync)
 │   ├── canvas/InkBackgroundCanvas.svelte
 │   ├── catalog/CatalogGrid.svelte    # Grilla store-driven (fallback SSR)
@@ -151,8 +155,11 @@ autodetectan Astro).
    - Crear el proyecto en Supabase.
    - Aplicar las migraciones (`npx supabase db push`, o ejecutarlas en el SQL Editor). El esquema base son
      `0001`–`0004`; `0005_services.sql` agrega el menú de servicios gestionado, `0006_team_members.sql`
-     agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada) y
+     agrega el equipo (`public.team_members`, RLS: lectura pública de activos, escritura autenticada),
      `0008_availability_blocks.sql` agrega `public.availability_blocks` + `public.studio_schedule`
-     (RLS: lectura pública de disponibilidad, escritura de administradores).
+     (RLS: lectura pública de disponibilidad, escritura de administradores) y
+     `0009_payments_and_booking_proof.sql` agrega `public.payment_methods` (RLS: lectura pública de
+     activos, CRUD autenticado), los campos de adelanto/comprobante en `bookings`, la bitácora
+     `public.booking_events` y el catálogo inicial de métodos de pago.
    - Cargar en el hosting `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` (clave `anon`, no la `service_role`).
 4. Build: `npm run build` (directorio de publicación: `dist`).

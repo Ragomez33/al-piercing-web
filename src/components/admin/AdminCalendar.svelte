@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ChevronLeft, ChevronRight } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight, X } from "lucide-svelte";
   import { DataError, dataStore } from "../../lib/data/store";
-  import { approveBooking, cancelBooking } from "../../lib/services/booking";
   import { getDayAvailability } from "../../lib/services/availability";
-  import { buildBookingConfirmationLink } from "../../lib/utils/booking";
-  import { WHATSAPP_PHONE } from "../../lib/config";
+  import { BOOKING_STATUS_LABELS } from "../../lib/utils/booking";
   import { localISODate } from "../../lib/utils/dates";
   import { blockOverlapsDay, localDateFromISO, localTimeFromISO } from "../../lib/utils/availability";
-  import type { Booking, BookingStatus, AvailabilityBlock } from "../../lib/types/domain";
+  import type { Booking, AvailabilityBlock } from "../../lib/types/domain";
   import {
     addMonths,
     dayStatusSummary,
@@ -16,7 +14,7 @@
     monthLabel,
     startOfMonth,
   } from "../../lib/utils/calendar";
-  import { formatCents } from "../../lib/utils/money";
+  import AdminBookingDetail from "./AdminBookingDetail.svelte";
 
   const WEEKDAYS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
 
@@ -28,21 +26,12 @@
   let loading = $state(false);
   let calError = $state("");
 
-  // Booking modal
+  // Booking detail / reschedule
   let selected = $state<Booking | null>(null);
   let actionError = $state("");
   let rescheduling = $state(false);
   let reDate = $state("");
   let reSlots = $state<string[]>([]);
-  let approving = $state(false);
-  let cancelling = $state(false);
-  let confirmationUrl = $state<string | null>(null);
-
-  const STATUS_LABELS: Record<BookingStatus, string> = {
-    PENDING: "Pendiente",
-    CONFIRMED: "Confirmado",
-    CANCELLED: "Cancelado",
-  };
 
   const cells = $derived(monthGrid(monthStart));
   const monthCells = $derived(cells.filter((cell) => cell.inMonth));
@@ -144,57 +133,25 @@
     selected = booking;
     actionError = "";
     rescheduling = false;
-    approving = false;
-    cancelling = false;
-    confirmationUrl =
-      booking.status === "CONFIRMED"
-        ? buildBookingConfirmationLink(booking, WHATSAPP_PHONE)
-        : null;
   }
 
   function closeBooking() {
     selected = null;
     rescheduling = false;
-    confirmationUrl = null;
   }
 
-  // --- Booking actions (transitions delegated to the domain service, §IV) ---
-  async function approveCita() {
-    if (!selected || approving) return;
-    actionError = "";
-    approving = true;
-    try {
-      const result = await approveBooking(selected.id, WHATSAPP_PHONE);
-      selected = result.booking;
-      confirmationUrl = result.confirmationUrl;
-      await reload();
-    } catch (err) {
-      actionError = err instanceof DataError ? err.message : "No se pudo aprobar la cita";
-    } finally {
-      approving = false;
-    }
+  /** Patches the agenda in place after a detail action (feature 018). */
+  function onBookingChanged(updated: Booking) {
+    selected = updated;
+    bookings = bookings.map((booking) => (booking.id === updated.id ? updated : booking));
   }
 
-  async function cancelCita() {
-    if (!selected || cancelling) return;
-    actionError = "";
-    cancelling = true;
-    try {
-      await cancelBooking(selected.id);
-      selected = null;
-      confirmationUrl = null;
-      await reload();
-    } catch (err) {
-      actionError = err instanceof DataError ? err.message : "No se pudo cancelar";
-    } finally {
-      cancelling = false;
-    }
-  }
-
-  function startReschedule() {
-    if (!selected) return;
+  function startReschedule(target?: Booking) {
+    const booking = target ?? selected;
+    if (!booking) return;
+    selected = booking;
     rescheduling = true;
-    reDate = selected.date;
+    reDate = booking.date;
     rebuildReSlots();
   }
 
@@ -331,7 +288,7 @@
                 class="appt"
                 onclick={() => openBooking(booking)}
                 aria-label={`${booking.timeSlot} ${booking.clientName} ${booking.serviceName} ${
-                  STATUS_LABELS[booking.status]
+                  BOOKING_STATUS_LABELS[booking.status]
                 }`}
               >
                 <span class="appt-time">{booking.timeSlot}</span>
@@ -345,7 +302,7 @@
                   {/if}
                 </span>
                 <span class="badge badge-{booking.status.toLowerCase()}">
-                  {STATUS_LABELS[booking.status]}
+                  {BOOKING_STATUS_LABELS[booking.status]}
                 </span>
               </button>
             </li>
@@ -369,72 +326,39 @@
   {/if}
 </section>
 
-{#if selected}
+{#if selected && !rescheduling}
+  <AdminBookingDetail
+    booking={selected}
+    onClose={closeBooking}
+    onChanged={onBookingChanged}
+    onReschedule={startReschedule}
+  />
+{:else if selected && rescheduling}
   <div class="backdrop" onclick={closeBooking} role="presentation"></div>
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
     <header class="modal-head">
-      <h2 id="booking-modal-title">Detalle de la cita</h2>
+      <h2 id="booking-modal-title">Reagendar cita</h2>
       <button type="button" class="icon-btn" onclick={closeBooking} aria-label="Cerrar">
         <X size={20} />
       </button>
     </header>
 
-    <dl class="detail">
-      <dt>Cliente</dt>
-      <dd>{selected.clientName}</dd>
-      <dt>WhatsApp</dt>
-      <dd>{selected.clientWhatsapp}</dd>
-      <dt>Servicio</dt>
-      <dd>{selected.serviceName}</dd>
-      <dt>Fecha / Hora</dt>
-      <dd>{selected.date} · {selected.timeSlot}</dd>
-      <dt>Precio total</dt>
-      <dd>{formatCents(selected.priceCents)}</dd>
-      <dt>Adelanto (50%)</dt>
-      <dd class="gold">{formatCents(selected.depositCents)}</dd>
-      <dt>Saldo en el local</dt>
-      <dd>{formatCents(selected.priceCents - selected.depositCents)}</dd>
-      <dt>Estado</dt>
-      <dd><span class="badge badge-{selected.status.toLowerCase()}">{STATUS_LABELS[selected.status]}</span></dd>
-    </dl>
-
-    {#if !rescheduling}
-      <div class="actions">
-        {#if selected.status === "PENDING"}
-          <button type="button" class="primary" onclick={approveCita} disabled={approving}>
-            {approving ? "Aprobando…" : "Aprobar Cita"}
-          </button>
-        {/if}
-        <button type="button" class="ghost" onclick={startReschedule}>Reagendar</button>
-        {#if selected.status !== "CANCELLED"}
-          <button type="button" class="danger" onclick={cancelCita} disabled={cancelling}>
-            {cancelling ? "Cancelando…" : "Cancelar Cita"}
-          </button>
-        {/if}
-      </div>
-      {#if selected.status === "CONFIRMED" && confirmationUrl}
-        <a class="wa-link" href={confirmationUrl} target="_blank" rel="noopener noreferrer">
-          Notificar confirmación por WhatsApp
-        </a>
+    <div class="reschedule">
+      <label class="field" for="re-date">Nueva fecha</label>
+      <input class="input" id="re-date" type="date" bind:value={reDate} onchange={rebuildReSlots} />
+      <label class="field">Nuevo horario (disponibles)</label>
+      {#if reSlots.length === 0}
+        <p class="hint">No hay horarios libres para esta fecha.</p>
+      {:else}
+        <div class="slot-grid">
+          {#each reSlots as slot (slot)}
+            <button type="button" class="slot" onclick={() => applyReschedule(slot)}>
+              {slot}
+            </button>
+          {/each}
+        </div>
       {/if}
-    {:else}
-      <div class="reschedule">
-        <label class="field" for="re-date">Nueva fecha</label>
-        <input class="input" id="re-date" type="date" bind:value={reDate} onchange={rebuildReSlots} />
-        <label class="field">Nuevo horario (disponibles)</label>
-        {#if reSlots.length === 0}
-          <p class="hint">No hay horarios libres para esta fecha.</p>
-        {:else}
-          <div class="slot-grid">
-            {#each reSlots as slot (slot)}
-              <button type="button" class="slot" onclick={() => applyReschedule(slot)}>
-                {slot}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
+    </div>
 
     {#if actionError}
       <p class="error" role="alert">{actionError}</p>
@@ -854,30 +778,6 @@
     cursor: pointer;
   }
 
-  .detail {
-    margin: 0 0 1rem;
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.4rem 1rem;
-  }
-
-  .detail dt {
-    color: var(--text-muted);
-    font-size: 0.82rem;
-  }
-
-  .detail dd {
-    margin: 0;
-    color: var(--text-primary);
-    text-align: right;
-    overflow-wrap: anywhere;
-  }
-
-  .detail dd.gold {
-    color: var(--text-gold);
-    font-weight: 700;
-  }
-
   .badge {
     flex: 0 0 auto;
     font-size: 0.72rem;
@@ -892,16 +792,18 @@
     border: 1px solid var(--status-pending-edge);
   }
 
-  .badge-confirmed {
+  .badge-confirmed,
+  .badge-completed {
     background: var(--status-confirmed-bg);
     color: var(--accent-positive);
     border: 1px solid var(--status-confirmed-edge);
   }
 
-  .badge-cancelled {
-    background: var(--status-cancelled-bg);
+  .badge-cancelled,
+  .badge-rejected {
+    background: var(--status-rejected-bg);
     color: var(--accent-negative);
-    border: 1px solid var(--status-cancelled-edge);
+    border: 1px solid var(--status-rejected-edge);
   }
 
   .badge-block {
@@ -910,16 +812,7 @@
     border: 1px dashed var(--accent-wood);
   }
 
-  .actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.75rem;
-  }
-
-  .primary,
-  .ghost,
-  .danger {
+  .ghost {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -929,28 +822,6 @@
     border-radius: var(--radius-btn);
     font-weight: 600;
     cursor: pointer;
-    border: none;
-  }
-
-  .small {
-    min-height: 38px;
-    font-size: 0.85rem;
-    padding: 0.4rem 0.9rem;
-  }
-
-  .primary {
-    background: var(--accent-primary);
-    color: var(--accent-on);
-    box-shadow: var(--shadow-glow);
-    transition: transform 160ms ease, box-shadow 160ms ease;
-  }
-
-  .primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: var(--glow-btn-primary);
-  }
-
-  .ghost {
     background: var(--bg-btn-secondary);
     color: var(--text-secondary);
     border: var(--border-btn-secondary);
@@ -961,40 +832,10 @@
     border: var(--border-btn-secondary-hover);
   }
 
-  .danger {
-    background: transparent;
-    color: var(--accent-negative);
-    border: 1px solid var(--accent-negative);
-  }
-
-  .primary:disabled,
-  .ghost:disabled,
-  .danger:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .wa-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    padding: 0.5rem 1.1rem;
-    margin-bottom: 0.75rem;
-    border-radius: var(--radius-btn);
-    border: 1px solid var(--accent-primary);
-    color: var(--accent-primary);
-    font-weight: 600;
-    text-decoration: none;
-    text-align: center;
-  }
-
-  .wa-link:hover,
-  .wa-link:focus-visible {
-    background: var(--accent-primary);
-    color: var(--accent-on);
-    outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
+  .small {
+    min-height: 38px;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.9rem;
   }
 
   .reschedule {
@@ -1026,29 +867,10 @@
     outline-offset: 2px;
   }
 
-  .hint-block {
-    margin: 0;
-    color: var(--text-gold);
-    font-weight: 700;
-  }
-
   .hint-static {
     color: var(--text-muted);
     font-size: 0.85rem;
     padding: 0.4rem 0.9rem;
-  }
-
-  .modal form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 0.6rem;
   }
 
   /* Breakpoint switch: grid on desktop, day strip on mobile. */
@@ -1065,7 +887,6 @@
   @media (prefers-reduced-motion: reduce) {
     .day-cell,
     .appt,
-    .primary,
     .ghost {
       transition: none;
     }

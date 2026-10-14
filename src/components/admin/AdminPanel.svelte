@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { CalendarDays, Clock, Image, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
+  import { CalendarDays, Clock, CreditCard, Image, Lock, LogOut, Menu, Package, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-svelte";
   import {
     getActiveSession,
     onAuthStateChange,
@@ -22,8 +22,9 @@
   import { uploadImage, uploadProductImage } from "../../lib/services/storage";
   import AdminCalendar from "./AdminCalendar.svelte";
   import AdminSchedule from "./AdminSchedule.svelte";
+  import AdminPayments from "./AdminPayments.svelte";
 
-  type AdminTab = "calendar" | "schedule" | "catalog" | "services" | "gallery" | "team";
+  type AdminTab = "calendar" | "schedule" | "payments" | "catalog" | "services" | "gallery" | "team";
   type GateStatus = "checking" | "notice" | "login" | "dashboard";
 
   let status = $state<GateStatus>("checking");
@@ -615,6 +616,7 @@
     }
     const params = new URLSearchParams(window.location.search);
     if (params.get("tab") === "schedule") tab = "schedule";
+    else if (params.get("tab") === "payments") tab = "payments";
     else if (params.get("tab") === "catalog") tab = "catalog";
     else if (params.get("tab") === "services") tab = "services";
     else if (params.get("tab") === "gallery") tab = "gallery";
@@ -843,6 +845,15 @@
           <button
             type="button"
             class="side-link"
+            class:active={tab === "payments"}
+            aria-current={tab === "payments" ? "page" : undefined}
+            onclick={() => switchTab("payments")}
+          >
+            <CreditCard size={18} aria-hidden="true" /> Métodos de Pago
+          </button>
+          <button
+            type="button"
+            class="side-link"
             class:active={tab === "catalog"}
             aria-current={tab === "catalog" ? "page" : undefined}
             onclick={() => switchTab("catalog")}
@@ -893,6 +904,8 @@
       <AdminCalendar />
     {:else if tab === "schedule"}
       <AdminSchedule />
+    {:else if tab === "payments"}
+      <AdminPayments />
     {:else if tab === "catalog"}
       <div class="toolbar">
         <button type="button" class="primary" onclick={() => { createError = ""; showCreate = true; }}>

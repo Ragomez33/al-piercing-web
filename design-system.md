@@ -17,8 +17,8 @@ the studio (admin). These are the only modules of the product (governance §1.1)
 | `landing` | Hero del estudio de piercing, bio, menú de servicios estilo Setmore, galería de trabajos, bloque de proceso y sección **Nuestro Equipo / Artistas** (datos gestionados) | `/` | Implemented |
 | `landing-v2` | Landing **alternativa** estilo Setmore de **scroll continuo**: barra de anclas (Servicios · Equipo · Acerca de · Galería · Reseñas · Dirección) + grid de 2 columnas (contenido + tarjeta lateral sticky con horario en vivo, valoración y "Reservar mi cita"). Coexiste con `/` reutilizando la misma capa de datos | `/landing-v2` | Implemented |
 | `catalog` | Catálogo de argollas y labrets de titanio, joyería zirconia/navel y kits de aftercare con carrito flotante y checkout pre-llenado a WhatsApp | `/catalog` | Implemented |
-| `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente y cálculo automático del 50% de adelanto con salida a WhatsApp | `/booking` | Implemented |
-| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grilla mensual de citas con badges/dots por día y detalle del día con Aprobar/Reagendar/Cancelar + bloqueos), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD completo del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) sobre la capa híbrida de datos | `/admin` | Implemented |
+| `booking` | Flujo de reserva: selección de servicio, selector de fecha/hora, datos del cliente, **paso de pago del adelanto** (método + referencia + comprobante) y cálculo automático del 50% de adelanto con salida a WhatsApp | `/booking` | Implemented |
+| `admin` | Panel privado protegido por login (Supabase Auth) con pestañas **Calendario** (grilla mensual de citas con badges/dots por día y detalle con Aprobar/Rechazar/Reagendar/Cancelar + verificación de pago con comprobante ampliable), **Horarios** (configuración semanal + bloqueos), **Métodos de Pago** (CRUD de las opciones de pago del adelanto), **Inventario** (stock inline, publicar/ocultar, alta de productos), **Servicios** (CRUD del menú) y **Equipo** (CRUD del staff con avatar, activar/desactivar y eliminar) sobre la capa híbrida de datos | `/admin` | Implemented |
 
 > **History:** v1.x of this document described **Foundly POS** (a local-first point-of-sale app).
 > v2.0.0 re-labeled it as *Tattoo Art* but kept a React Native/Gluestack description that never
@@ -78,6 +78,8 @@ consume `var(--token)`; raw hex/rgba is allowed **only** inside `tokens.css`.
   - `status-pending-bg` / `status-pending-edge`: amber/orange (`bg-wood-pill` + `accent-gold`).
   - `status-confirmed-bg` / `status-confirmed-edge`: green-gold (`accent-positive-tint` + `accent-gold`).
   - `status-cancelled-bg` / `status-cancelled-edge`: red/muted (`accent-negative-tint` + `accent-negative`).
+  - `status-rejected-bg` / `status-rejected-edge` (feature 018): red/muted, shared with `cancelled`
+    (`accent-negative-tint` + `accent-negative`).
 
 ### Typography & Text
 - `text-primary`: `#F4F4F5` — maximum readability on dark surfaces.

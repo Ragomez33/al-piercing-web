@@ -50,6 +50,8 @@ export async function submitBookingRequest(
   if (!bookable) {
     throw new DataError("Este horario ya no se encuentra disponible");
   }
+  // Payment fields (feature 018) ride along on `NewBookingInput` and are persisted
+  // verbatim by the adapter; the appointment always starts PENDING.
   const booking = await dataStore.createBooking(input);
   return { booking, noticeUrl: buildBookingNoticeLink(booking, phone) };
 }
@@ -65,15 +67,15 @@ async function resolveServiceDuration(serviceId: string): Promise<number> {
 }
 
 /**
- * Approves a request: `PENDING → CONFIRMED`. Already-confirmed bookings are a
- * no-op returning the current record (re-sendable link); a cancelled booking is
- * rejected so the final state stays consistent (admin-approval-contract §3/§6).
+ * Approves a request: `PENDING → CONFIRMED`. An already-confirmed/completed booking
+ * is a no-op returning the current record (re-sendable link); a rejected/cancelled
+ * booking is refused so the final state stays consistent (feature 009/018 contract).
  */
 export async function approveBooking(id: string, phone: string): Promise<ApprovalResult> {
   const existing = await findBooking(id);
   if (!existing) throw new DataError("Reserva no encontrada");
-  if (existing.status === "CANCELLED") {
-    throw new DataError("No se puede aprobar una reserva cancelada");
+  if (existing.status === "CANCELLED" || existing.status === "REJECTED") {
+    throw new DataError("No se puede aprobar una reserva rechazada o cancelada");
   }
 
   const booking =
@@ -82,6 +84,34 @@ export async function approveBooking(id: string, phone: string): Promise<Approva
       : existing;
 
   return { booking, confirmationUrl: buildBookingConfirmationLink(booking, phone) };
+}
+
+/**
+ * Rejects a request: `PENDING → REJECTED`, releasing its date/time (feature 018).
+ * A rejected/cancelled booking is returned unchanged (idempotent).
+ */
+export async function rejectBooking(id: string): Promise<Booking> {
+  const existing = await findBooking(id);
+  if (!existing) throw new DataError("Reserva no encontrada");
+  if (existing.status === "CANCELLED" || existing.status === "REJECTED") return existing;
+  return dataStore.updateBookingStatus(id, "REJECTED");
+}
+
+/**
+ * Marks an approved appointment as fulfilled: `CONFIRMED → COMPLETED` (terminal,
+ * keeps occupying its slot). Refused for pending/rejected/cancelled bookings.
+ */
+export async function completeBooking(id: string): Promise<Booking> {
+  const existing = await findBooking(id);
+  if (!existing) throw new DataError("Reserva no encontrada");
+  if (existing.status === "PENDING") {
+    throw new DataError("Aprueba la reserva antes de completarla");
+  }
+  if (existing.status === "CANCELLED" || existing.status === "REJECTED") {
+    throw new DataError("No se puede completar una reserva rechazada o cancelada");
+  }
+  if (existing.status === "COMPLETED") return existing;
+  return dataStore.updateBookingStatus(id, "COMPLETED");
 }
 
 /**

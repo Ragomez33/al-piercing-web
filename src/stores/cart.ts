@@ -1,6 +1,7 @@
 import { derived, writable } from "svelte/store";
 import { paymentMethodLabel, type PaymentMethod, type Product } from "../lib/types/content";
 import { formatCents } from "../lib/utils/money";
+import { isValidWhatsAppNumber, normalizeWhatsAppNumber } from "../lib/utils/phone";
 
 // Re-exported so components keep a single import surface for cart formatting.
 export { formatCents };
@@ -67,7 +68,8 @@ export function buildWhatsAppLink(options: {
 }): string | null {
   const { phone, items, paymentMethod } = options;
   if (items.length === 0) return null;
-  if (!/^[0-9]+$/.test(phone)) return null;
+  const target = normalizeWhatsAppNumber(phone);
+  if (!isValidWhatsAppNumber(target)) return null;
 
   const lines = items.map(
     (item) => `- ${item.quantity}x ${item.product.name} (${formatCents(item.product.priceCents)})`,
@@ -80,5 +82,5 @@ export function buildWhatsAppLink(options: {
     `Método de pago de preferencia: ${paymentMethodLabel(paymentMethod)}`,
   ].join("\n");
 
-  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${target}?text=${encodeURIComponent(message)}`;
 }

@@ -75,3 +75,20 @@ export async function uploadImage(file: File, options: UploadImageOptions): Prom
 export async function uploadProductImage(file: File): Promise<string> {
   return uploadImage(file, { prefix: "product-" });
 }
+
+/** Maximum accepted size for a payment receipt (5 MB). */
+const MAX_PROOF_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Uploads a client payment receipt and returns its public URL (feature 018).
+ * Rejects non-images and oversize files with a typed `DataError` before uploading.
+ */
+export async function uploadPaymentProofImage(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new DataError("El comprobante debe ser una imagen");
+  }
+  if (file.size > MAX_PROOF_BYTES) {
+    throw new DataError("La imagen es muy grande (máximo 5 MB)");
+  }
+  return uploadImage(file, { prefix: "proof-" });
+}

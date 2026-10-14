@@ -35,6 +35,9 @@
   --status-confirmed-edge: var(--accent-gold);
   --status-cancelled-bg: var(--accent-negative-tint);
   --status-cancelled-edge: var(--accent-negative);
+  /* REJECTED (feature 018) shares the red/muted treatment of CANCELLED. */
+  --status-rejected-bg: var(--accent-negative-tint);
+  --status-rejected-edge: var(--accent-negative);
 
   /* Typography & Text */
   --text-primary: #F4F4F5;

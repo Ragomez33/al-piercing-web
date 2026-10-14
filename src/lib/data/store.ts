@@ -3,7 +3,14 @@
  * Selects the adapter once at module init based on the presence of public Supabase
  * environment variables; every module reads/writes through this facade.
  */
-import type { DataMode, DataStore, GalleryItemRecord, StudioSchedule, TeamMember } from "../types/domain";
+import type {
+  DataMode,
+  DataStore,
+  GalleryItemRecord,
+  PaymentMethod,
+  StudioSchedule,
+  TeamMember,
+} from "../types/domain";
 import type { PiercingService } from "./services";
 import { createLocalAdapter } from "./adapters/local";
 import { createSupabaseAdapter } from "./adapters/supabase";
@@ -109,6 +116,26 @@ function withChangeNotifications(adapter: DataStore): DataStore {
       publishDataChange("bookings");
       return record;
     },
+    // --- Payment methods (feature 018) ---
+    async createPaymentMethod(input) {
+      const record = await adapter.createPaymentMethod(input);
+      publishDataChange("paymentMethods");
+      return record;
+    },
+    async updatePaymentMethod(id, patch) {
+      const record = await adapter.updatePaymentMethod(id, patch);
+      publishDataChange("paymentMethods");
+      return record;
+    },
+    async togglePaymentMethodActive(id) {
+      const record = await adapter.togglePaymentMethodActive(id);
+      publishDataChange("paymentMethods");
+      return record;
+    },
+    async deletePaymentMethod(id) {
+      await adapter.deletePaymentMethod(id);
+      publishDataChange("paymentMethods");
+    },
   };
 }
 
@@ -154,4 +181,12 @@ export async function listFallbackGalleryItems(): Promise<GalleryItemRecord[]> {
  */
 export async function listFallbackSchedule(): Promise<StudioSchedule> {
   return createLocalAdapter().getSchedule();
+}
+
+/**
+ * Demo-seed payment methods served by the local adapter. Used as a non-blocking
+ * fallback when a live `listPaymentMethods()` read fails (feature 018).
+ */
+export async function listFallbackPaymentMethods(): Promise<PaymentMethod[]> {
+  return createLocalAdapter().listPaymentMethods();
 }

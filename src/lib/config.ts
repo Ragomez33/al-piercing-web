@@ -10,6 +10,16 @@ function envString(value: unknown, fallback: string): string {
 /** Destination WhatsApp number for bookings & cart orders (digits only, country code). */
 export const WHATSAPP_PHONE: string = envString(import.meta.env.PUBLIC_WHATSAPP_PHONE, "5215500000000");
 
+/**
+ * Default country calling code used to complete client WhatsApp numbers that omit
+ * it (e.g. `4248610492` → `584248610492`). Digits only, no `+`.
+ * Overridable via `PUBLIC_WHATSAPP_COUNTRY_CODE`; defaults to Venezuela (58).
+ */
+export const WHATSAPP_COUNTRY_CODE: string = envString(
+  import.meta.env.PUBLIC_WHATSAPP_COUNTRY_CODE,
+  "58",
+).replace(/\D/g, "");
+
 /** Brand icon/logo asset (public assets served at site root). */
 export const BRAND_LOGO: string = "/images/logo.png";
 

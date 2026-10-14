@@ -8,6 +8,7 @@ import {
   DataError,
   type AvailabilityBlock,
   type Booking,
+  type BookingEvent,
   type BookingStatus,
   type DataMode,
   type DataStore,
@@ -15,8 +16,11 @@ import {
   type NewAvailabilityBlockInput,
   type NewBookingInput,
   type NewGalleryItemInput,
+  type NewPaymentMethodInput,
   type NewProductInput,
   type NewTeamMemberInput,
+  type PaymentMethod,
+  type PaymentMethodDetails,
   type ProductRecord,
   type SchedulePatch,
   type StudioSchedule,
@@ -24,13 +28,14 @@ import {
   type TeamMember,
 } from "../../types/domain";
 import { WEEKDAY_BY_INDEX, WEEKDAY_ORDER } from "../../types/domain";
-import type { Database } from "../../../types/supabase";
+import type { Database, Json } from "../../../types/supabase";
 import { calcDepositCents } from "../../utils/money";
 import {
   blockOverlapsDay,
   validateBlockInput,
   validateScheduleDayPatch,
 } from "../../utils/availability";
+import { validatePaymentMethodInput } from "../../utils/payments";
 import type { NewServiceInput, PiercingService } from "../services";
 import { getSupabaseClient } from "../supabase-client";
 
@@ -41,6 +46,8 @@ type ScheduleDayRow = Database["public"]["Tables"]["studio_schedule"]["Row"];
 type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
 type TeamRow = Database["public"]["Tables"]["team_members"]["Row"];
 type GalleryRow = Database["public"]["Tables"]["gallery_items"]["Row"];
+type PaymentMethodRow = Database["public"]["Tables"]["payment_methods"]["Row"];
+type BookingEventRow = Database["public"]["Tables"]["booking_events"]["Row"];
 
 function toAvailabilityBlock(row: AvailabilityBlockRow): AvailabilityBlock {
   return {
@@ -64,22 +71,74 @@ function toStudioScheduleDay(row: ScheduleDayRow): StudioScheduleDay {
   };
 }
 
+/** Narrow a raw `status` string to the domain union (unknown → PENDING). */
+function normalizeBookingStatus(value: string): BookingStatus {
+  switch (value) {
+    case "CONFIRMED":
+      return "CONFIRMED";
+    case "REJECTED":
+      return "REJECTED";
+    case "COMPLETED":
+      return "COMPLETED";
+    case "CANCELLED":
+      return "CANCELLED";
+    default:
+      return "PENDING";
+  }
+}
+
 function toBooking(row: BookingRow): Booking {
-  const status: BookingStatus =
-    row.status === "CONFIRMED" ? "CONFIRMED" : row.status === "CANCELLED" ? "CANCELLED" : "PENDING";
   return {
     id: row.id,
     createdAt: row.created_at,
     clientName: row.client_name,
     clientWhatsapp: row.client_whatsapp,
+    clientEmail: row.client_email ? row.client_email : undefined,
     serviceId: row.service_id,
     serviceName: row.service_name,
     priceCents: row.price_cents,
     depositCents: row.deposit_cents,
     date: row.booking_date,
     timeSlot: row.time_slot,
-    status,
+    status: normalizeBookingStatus(row.status),
     notes: row.notes ?? undefined,
+    paymentMethodId: row.payment_method_id,
+    paymentMethodName: row.payment_method_name,
+    paymentReference: row.payment_reference,
+    paymentProofUrl: row.payment_proof_url,
+  };
+}
+
+/** Flatten a `jsonb` details column into a `Record<string, string>` (no `any`). */
+function toDetailsRecord(value: Json): PaymentMethodDetails {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const result: PaymentMethodDetails = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (raw === null || raw === undefined) continue;
+    result[key] = typeof raw === "string" ? raw : String(raw);
+  }
+  return result;
+}
+
+function toPaymentMethod(row: PaymentMethodRow): PaymentMethod {
+  return {
+    id: row.id,
+    type: row.type as PaymentMethod["type"],
+    title: row.title,
+    details: toDetailsRecord(row.details),
+    instructions: row.instructions,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+  };
+}
+
+function toBookingEvent(row: BookingEventRow): BookingEvent {
+  return {
+    id: row.id,
+    bookingId: row.booking_id,
+    fromStatus: row.from_status ? normalizeBookingStatus(row.from_status) : null,
+    toStatus: normalizeBookingStatus(row.to_status),
+    createdAt: row.created_at,
   };
 }
 
@@ -272,6 +331,7 @@ export function createSupabaseAdapter(): DataStore {
         .insert({
           client_name: input.clientName,
           client_whatsapp: input.clientWhatsapp,
+          client_email: input.clientEmail ?? "",
           service_id: input.serviceId,
           service_name: input.serviceName,
           price_cents: input.priceCents,
@@ -280,15 +340,29 @@ export function createSupabaseAdapter(): DataStore {
           time_slot: input.timeSlot,
           status: "PENDING",
           notes: input.notes ?? null,
+          payment_method_id: input.paymentMethodId ?? null,
+          payment_method_name: input.paymentMethodName ?? "",
+          payment_reference: input.paymentReference ?? "",
+          payment_proof_url: input.paymentProofUrl ?? "",
         })
         .select()
         .single();
       if (error) throw toDataError(error);
-      return toBooking(requireRow(data, "La reserva"));
+      const booking = toBooking(requireRow(data, "La reserva"));
+      await client.from("booking_events").insert({
+        booking_id: booking.id,
+        from_status: null,
+        to_status: booking.status,
+      });
+      return booking;
     },
 
     async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
       const client = getSupabaseClient();
+      const current = await client.from("bookings").select("status").eq("id", id).maybeSingle();
+      if (current.error) throw new DataError(current.error.message);
+      if (!current.data) throw new DataError("Reserva no encontrada");
+      const fromStatus = normalizeBookingStatus(current.data.status);
       const { data, error } = await client
         .from("bookings")
         .update({ status })
@@ -296,7 +370,113 @@ export function createSupabaseAdapter(): DataStore {
         .select()
         .single();
       if (error) throw new DataError(error.message);
-      return toBooking(requireRow(data, "La reserva"));
+      const booking = toBooking(requireRow(data, "La reserva"));
+      await client.from("booking_events").insert({
+        booking_id: id,
+        from_status: fromStatus,
+        to_status: status,
+      });
+      return booking;
+    },
+
+    async listBookingEvents(bookingId: string): Promise<BookingEvent[]> {
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("booking_events")
+        .select("*")
+        .eq("booking_id", bookingId)
+        .order("created_at", { ascending: true });
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toBookingEvent(row));
+    },
+
+    async listPaymentMethods(input): Promise<PaymentMethod[]> {
+      const client = getSupabaseClient();
+      let query = client
+        .from("payment_methods")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (!input?.includeInactive) query = query.eq("is_active", true);
+      const { data, error } = await query;
+      if (error) throw new DataError(error.message);
+      return (data ?? []).map((row) => toPaymentMethod(row));
+    },
+
+    async createPaymentMethod(input: NewPaymentMethodInput): Promise<PaymentMethod> {
+      validatePaymentMethodInput({
+        type: input.type,
+        title: input.title,
+        details: input.details,
+      });
+      const client = getSupabaseClient();
+      const { data, error } = await client
+        .from("payment_methods")
+        .insert({
+          type: input.type,
+          title: input.title.trim(),
+          details: input.details,
+          instructions: input.instructions?.trim() ?? "",
+          is_active: true,
+        })
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toPaymentMethod(requireRow(data, "El método de pago"));
+    },
+
+    async updatePaymentMethod(id, patch): Promise<PaymentMethod> {
+      const client = getSupabaseClient();
+      const current = await client
+        .from("payment_methods")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (current.error) throw new DataError(current.error.message);
+      if (!current.data) throw new DataError("Método de pago no encontrado");
+      const merged = {
+        type: patch.type ?? current.data.type,
+        title: patch.title ?? current.data.title,
+        details: patch.details ?? toDetailsRecord(current.data.details),
+      };
+      validatePaymentMethodInput(merged);
+      const update: Database["public"]["Tables"]["payment_methods"]["Update"] = {};
+      if (patch.type !== undefined) update.type = patch.type;
+      if (patch.title !== undefined) update.title = patch.title.trim();
+      if (patch.details !== undefined) update.details = patch.details;
+      if (patch.instructions !== undefined) update.instructions = patch.instructions.trim();
+      const { data, error } = await client
+        .from("payment_methods")
+        .update(update)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toPaymentMethod(requireRow(data, "El método de pago"));
+    },
+
+    async togglePaymentMethodActive(id: string): Promise<PaymentMethod> {
+      const client = getSupabaseClient();
+      const current = await client
+        .from("payment_methods")
+        .select("is_active")
+        .eq("id", id)
+        .maybeSingle();
+      if (current.error) throw new DataError(current.error.message);
+      if (!current.data) throw new DataError("Método de pago no encontrado");
+      const { data, error } = await client
+        .from("payment_methods")
+        .update({ is_active: !current.data.is_active })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw new DataError(error.message);
+      return toPaymentMethod(requireRow(data, "El método de pago"));
+    },
+
+    async deletePaymentMethod(id: string): Promise<void> {
+      const client = getSupabaseClient();
+      const { error } = await client.from("payment_methods").delete().eq("id", id);
+      if (error) throw new DataError(error.message);
     },
 
     async listBlocks(input): Promise<AvailabilityBlock[]> {

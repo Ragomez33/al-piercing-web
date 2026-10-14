@@ -21,7 +21,8 @@ export type DataResource =
   | "gallery"
   | "blocks"
   | "bookings"
-  | "schedule";
+  | "schedule"
+  | "paymentMethods";
 
 export interface DataChangeEvent {
   resource: DataResource;
@@ -48,6 +49,7 @@ const RESOURCES: readonly DataResource[] = [
   "blocks",
   "bookings",
   "schedule",
+  "paymentMethods",
 ];
 const ORIGIN = `alpi-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -135,6 +137,11 @@ function startRealtime(): void {
         "postgres_changes",
         { event: "*", schema: "public", table: "studio_schedule" },
         notify("schedule"),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payment_methods" },
+        notify("paymentMethods"),
       )
       .subscribe();
   } catch {

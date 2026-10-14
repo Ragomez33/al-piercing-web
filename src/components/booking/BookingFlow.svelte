@@ -1,14 +1,27 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Clock } from "lucide-svelte";
+  import { Clock, Upload } from "lucide-svelte";
   import { type PiercingService } from "../../lib/data/services";
   import { submitBookingRequest } from "../../lib/services/booking";
   import { getDayAvailability } from "../../lib/services/availability";
+  import { uploadPaymentProofImage } from "../../lib/services/storage";
   import { calcDepositCents, formatCents } from "../../lib/utils/money";
-  import { PAYMENT_BINANCE_PAY, PAYMENT_PAGO_MOVIL, WHATSAPP_PHONE } from "../../lib/config";
-  import { DataError, dataStore, listFallbackServices } from "../../lib/data/store";
+  import { fieldsForType, paymentMethodTypeLabel } from "../../lib/utils/payments";
+  import { WHATSAPP_COUNTRY_CODE, WHATSAPP_PHONE } from "../../lib/config";
+  import {
+    DataError,
+    dataStore,
+    listFallbackPaymentMethods,
+    listFallbackServices,
+  } from "../../lib/data/store";
   import { subscribeToDataChanges } from "../../lib/data/realtime";
   import { localISODate } from "../../lib/utils/dates";
+  import {
+    WHATSAPP_FORMAT_HINT,
+    isValidWhatsAppNumber,
+    normalizeWhatsAppNumber,
+  } from "../../lib/utils/phone";
+  import type { PaymentMethod } from "../../lib/types/domain";
 
   let selected = $state<PiercingService | null>(null);
   let date = $state("");
@@ -34,6 +47,18 @@
   let services = $state<PiercingService[]>([]);
   let servicesLoading = $state(true);
   let servicesNotice = $state("");
+
+  // Deposit payment step (feature 018). Only rendered when the chosen service
+  // requires a deposit.
+  let paymentMethods = $state<PaymentMethod[]>([]);
+  let paymentMethodsLoading = $state(false);
+  let paymentMethodsNotice = $state("");
+  let selectedMethodId = $state("");
+  let paymentReference = $state("");
+  let proofPreviewUrl = $state("");
+  let proofPublicUrl = $state("");
+  let proofUploading = $state(false);
+  let proofError = $state("");
 
   // Success panel (feature 009)
   let successOpen = $state(false);
@@ -101,13 +126,36 @@
   let depositCents = $derived(selected ? calcDepositCents(selected.priceCents) : 0);
   let balanceCents = $derived(selected ? selected.priceCents - depositCents : 0);
 
+  let requiresDeposit = $derived(selected?.requiresDeposit ?? false);
+  let selectedMethod = $derived(
+    paymentMethods.find((method) => method.id === selectedMethodId) ?? null,
+  );
+  let methodFields = $derived(selectedMethod ? fieldsForType(selectedMethod.type) : []);
+  // Payment is valid when no deposit is required, or a method + reference + a
+  // successfully uploaded proof are all present (feature 018 FR-010/FR-013).
+  let paymentValid = $derived(
+    !requiresDeposit ||
+      (!!selectedMethodId && paymentReference.trim().length > 0 && proofPublicUrl.length > 0),
+  );
+
   let formValid = $derived(
     !!selected &&
       !!date &&
       !!time &&
       clientName.trim().length > 1 &&
-      clientWhatsapp.trim().length >= 7,
+      isValidWhatsAppNumber(clientWhatsapp),
   );
+
+  // WhatsApp format guidance (feature 018 fix): only digits with country code.
+  let whatsappTouched = $state(false);
+  let whatsappError = $derived(
+    whatsappTouched && !isValidWhatsAppNumber(clientWhatsapp) ? WHATSAPP_FORMAT_HINT : "",
+  );
+
+  function normalizeWhatsapp() {
+    clientWhatsapp = normalizeWhatsAppNumber(clientWhatsapp);
+    whatsappTouched = true;
+  }
 
   function revealForm() {
     requestAnimationFrame(() => {
@@ -134,13 +182,22 @@
       const result = await submitBookingRequest(
         {
           clientName: clientName.trim(),
-          clientWhatsapp: clientWhatsapp.trim(),
+          clientWhatsapp: normalizeWhatsAppNumber(clientWhatsapp),
           serviceId: selected.id,
           serviceName: selected.name,
           priceCents: selected.priceCents,
           date,
           timeSlot: submittedTime,
           notes: notes.trim() || undefined,
+          // Deposit payment (feature 018) — omitted entirely for non-deposit services.
+          ...(selected.requiresDeposit
+            ? {
+                paymentMethodId: selectedMethodId,
+                paymentMethodName: selectedMethod?.title ?? "",
+                paymentReference: paymentReference.trim(),
+                paymentProofUrl: proofPublicUrl,
+              }
+            : {}),
         },
         WHATSAPP_PHONE,
       );
@@ -152,6 +209,8 @@
       clientWhatsapp = "";
       notes = "";
       time = "";
+      whatsappTouched = false;
+      resetPaymentState();
 
       noticeUrl = result.noticeUrl;
       lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -184,11 +243,60 @@
     }
   }
 
+  function resetPaymentState() {
+    selectedMethodId = "";
+    paymentReference = "";
+    proofPublicUrl = "";
+    proofError = "";
+    if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
+    proofPreviewUrl = "";
+  }
+
+  async function loadPaymentMethods() {
+    paymentMethodsLoading = true;
+    paymentMethodsNotice = "";
+    try {
+      paymentMethods = await dataStore.listPaymentMethods();
+    } catch {
+      // Non-blocking fallback to the demo seed served by the data layer (FR-012).
+      try {
+        paymentMethods = await listFallbackPaymentMethods();
+      } catch {
+        paymentMethods = [];
+      }
+      paymentMethodsNotice = "No se pudieron cargar los métodos de pago; mostrando los de ejemplo.";
+    } finally {
+      paymentMethodsLoading = false;
+    }
+  }
+
+  async function onProofSelected(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    proofError = "";
+    if (!file) return;
+    if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
+    proofPreviewUrl = URL.createObjectURL(file);
+    proofUploading = true;
+    proofPublicUrl = "";
+    try {
+      proofPublicUrl = await uploadPaymentProofImage(file);
+    } catch (err) {
+      proofError = err instanceof DataError ? err.message : "No se pudo subir el comprobante";
+    } finally {
+      proofUploading = false;
+    }
+  }
+
   onMount(async () => {
-    await loadServices();
-    unsubscribeLive = subscribeToDataChanges(["blocks", "bookings", "schedule"], () => {
-      scheduleLiveRefresh();
-    });
+    await Promise.all([loadServices(), loadPaymentMethods()]);
+    unsubscribeLive = subscribeToDataChanges(
+      ["blocks", "bookings", "schedule", "paymentMethods"],
+      () => {
+        scheduleLiveRefresh();
+        void loadPaymentMethods();
+      },
+    );
     const id = new URLSearchParams(window.location.search).get("service");
     if (!id) return;
     const match = services.find((service) => service.id === id);
@@ -201,6 +309,7 @@
   onDestroy(() => {
     unsubscribeLive?.();
     if (liveTimer) clearTimeout(liveTimer);
+    if (proofPreviewUrl) URL.revokeObjectURL(proofPreviewUrl);
   });
 </script>
 
@@ -307,16 +416,26 @@
       </label>
 
       <label class="field">
-        <span>Tu WhatsApp</span>
+        <span>Tu WhatsApp (+{WHATSAPP_COUNTRY_CODE})</span>
         <input
           class="input"
           type="tel"
           bind:value={clientWhatsapp}
           autocomplete="tel"
-          inputmode="tel"
-          placeholder="5215500000000"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="15"
+          placeholder="4248610492"
+          aria-invalid={!!whatsappError}
+          aria-describedby={whatsappError ? "wa-error" : "wa-help"}
+          onblur={normalizeWhatsapp}
           required
         />
+        {#if whatsappError}
+          <small id="wa-error" class="field-error" role="alert">{whatsappError}</small>
+        {:else}
+          <small id="wa-help" class="field-help">{WHATSAPP_FORMAT_HINT}</small>
+        {/if}
       </label>
 
       <label class="field">
@@ -337,26 +456,102 @@
           <span>Saldo en el local</span>
           <span class="amount amount-muted">{formatCents(balanceCents)}</span>
         </div>
-        <div class="deposit-payments">
-          <span class="pay-label">Datos para abonar el adelanto</span>
-          <span>
-            <strong>{PAYMENT_PAGO_MOVIL.label}:</strong> {PAYMENT_PAGO_MOVIL.ref}
-          </span>
-          <span>
-            <strong>{PAYMENT_BINANCE_PAY.label}:</strong> {PAYMENT_BINANCE_PAY.ref}
-          </span>
-        </div>
       </div>
+
+      {#if requiresDeposit}
+        <div class="payment-step">
+          <h3 class="pay-step-title">4. Pago del adelanto</h3>
+
+          {#if paymentMethodsNotice}
+            <p class="hint" role="status">{paymentMethodsNotice}</p>
+          {/if}
+
+          {#if paymentMethodsLoading}
+            <p class="hint" aria-live="polite">Cargando métodos de pago…</p>
+          {:else if paymentMethods.length === 0}
+            <p class="hint" role="status">
+              No hay métodos de pago disponibles por el momento. Escríbenos por WhatsApp para coordinar
+              tu adelanto.
+            </p>
+          {:else}
+            <fieldset class="methods" disabled={proofUploading}>
+              <legend>Método de pago</legend>
+              <div class="method-list">
+                {#each paymentMethods as method (method.id)}
+                  <button
+                    type="button"
+                    class="method"
+                    class:active={selectedMethodId === method.id}
+                    aria-pressed={selectedMethodId === method.id}
+                    onclick={() => { selectedMethodId = method.id; }}
+                  >
+                    <span class="method-name">{method.title}</span>
+                    <span class="chip">{paymentMethodTypeLabel(method.type)}</span>
+                  </button>
+                {/each}
+              </div>
+            </fieldset>
+
+            {#if selectedMethod}
+              <div class="method-details">
+                {#each methodFields as field (field.key)}
+                  {#if (selectedMethod.details[field.key] ?? "").trim()}
+                    <span><strong>{field.label}:</strong> {selectedMethod.details[field.key]}</span>
+                  {/if}
+                {/each}
+                {#if selectedMethod.instructions}
+                  <p class="method-instructions">{selectedMethod.instructions}</p>
+                {/if}
+              </div>
+            {/if}
+
+            <label class="field">
+              <span>Número de referencia</span>
+              <input
+                class="input"
+                type="text"
+                bind:value={paymentReference}
+                placeholder="Ej. 123456789"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>Captura del comprobante</span>
+              <input
+                class="input file"
+                type="file"
+                accept="image/*"
+                onchange={onProofSelected}
+                required
+              />
+            </label>
+            {#if proofUploading}
+              <p class="hint" aria-live="polite">Subiendo comprobante…</p>
+            {:else if proofPublicUrl}
+              <p class="hint ok" role="status">Comprobante cargado.</p>
+            {/if}
+            {#if proofPreviewUrl}
+              <img class="proof-preview" src={proofPreviewUrl} alt="Vista previa del comprobante" />
+            {/if}
+            {#if proofError}
+              <p class="error" role="alert">{proofError}</p>
+            {/if}
+          {/if}
+        </div>
+      {/if}
 
       {#if submitError}
         <p class="error" role="alert">{submitError}</p>
       {/if}
 
-      <button type="submit" class="submit" disabled={!formValid || submitting}>
+      <button type="submit" class="submit" disabled={!formValid || !paymentValid || submitting}>
         {submitting ? "Procesando reserva…" : "Solicitar cita"}
       </button>
       {#if !formValid}
         <p class="hint">Completá nombre, WhatsApp, fecha y hora para continuar.</p>
+      {:else if !paymentValid}
+        <p class="hint">Elegí un método de pago, coloca la referencia y sube el comprobante.</p>
       {/if}
     </form>
   </section>
@@ -538,6 +733,20 @@
     margin-bottom: 1rem;
   }
 
+  .field-help {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+
+  .field-error {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--accent-negative);
+    font-size: 0.8rem;
+  }
+
   .slots {
     border: none;
     padding: 0;
@@ -652,6 +861,104 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+
+  /* Deposit payment step (feature 018) */
+  .payment-step {
+    margin: 0.5rem 0 1.25rem;
+    padding-top: 0.5rem;
+    border-top: var(--divider-subtle);
+  }
+
+  .pay-step-title {
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem;
+  }
+
+  .methods {
+    border: none;
+    padding: 0;
+    margin: 0 0 1rem;
+  }
+
+  .methods legend {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .method-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .method {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 0.9rem;
+    border-radius: var(--radius-pill);
+    border: var(--border-card);
+    background: var(--bg-badge-pill);
+    color: var(--text-primary);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .method.active {
+    background: var(--accent-primary);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .method:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .method-name {
+    overflow-wrap: anywhere;
+  }
+
+  .method-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: var(--bg-card-light);
+    border: var(--border-card);
+    border-radius: var(--radius-card);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+  }
+
+  .method-instructions {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .file {
+    padding: 0.5rem;
+  }
+
+  .proof-preview {
+    width: 100%;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: var(--radius-image);
+    border: var(--border-card);
+    margin-bottom: 0.75rem;
+    background: var(--bg-app-body);
+  }
+
+  .hint.ok {
+    color: var(--accent-positive);
   }
 
   .error {
